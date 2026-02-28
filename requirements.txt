@@ -1,0 +1,6 @@
+langchain
+langchain-openai
+PyGithub
+python-dotenv
+prompt_toolkit
+typer
