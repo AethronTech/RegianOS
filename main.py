@@ -3,6 +3,12 @@ import subprocess
 import os
 
 def main():
+    # --cli vlag = terminal interface, anders Streamlit dashboard
+    if "--cli" in sys.argv:
+        from regian.interface.cli import start_cli
+        start_cli()
+        return
+
     print("🚀 Regian OS Cockpit wordt opgestart via Streamlit...")
     
     # Pad naar het dashboard bestand
