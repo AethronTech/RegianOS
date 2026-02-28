@@ -10,6 +10,8 @@ def main():
         return
 
     print("🚀 Regian OS Cockpit wordt opgestart via Streamlit...")
+    print("   Tip: gebruik './build.sh --cli' voor de terminal interface.")
+    print()
     
     # Pad naar het dashboard bestand
     dashboard_path = os.path.join("regian", "interface", "dashboard.py")
