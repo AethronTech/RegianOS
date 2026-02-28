@@ -13,11 +13,7 @@ def main():
     # waar je in de sidebar kunt switchen tussen Ollama en Gemini.
     try:
         subprocess.run(
-            [sys.executable, "-m", "streamlit", "run", dashboard_path,
-             "--server.headless=true",
-             "--server.address=0.0.0.0",
-             "--server.enableCORS=false",
-             "--server.enableXsrfProtection=false"],
+            [sys.executable, "-m", "streamlit", "run", dashboard_path],
             check=True
         )
     except subprocess.CalledProcessError as e:
