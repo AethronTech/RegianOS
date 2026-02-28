@@ -64,6 +64,36 @@ def start_gui():
         st.session_state.messages = []
         st.rerun()
 
+    # ── Cron notificaties ─────────────────────────────────────
+    if "notif_last_seen" not in st.session_state:
+        st.session_state.notif_last_seen = ""
+
+    all_jobs = get_all_jobs()
+    recent = sorted(
+        [
+            (jid, j) for jid, j in all_jobs.items()
+            if j.get("last_run") and j["last_run"] > st.session_state.notif_last_seen
+        ],
+        key=lambda x: x[1]["last_run"],
+        reverse=True,
+    )
+    badge = f" ({len(recent)} nieuw)" if recent else ""
+    with st.sidebar.expander(f"🔔 Notificaties{badge}", expanded=False):
+        if recent:
+            for jid, j in recent:
+                icon = j.get("last_status", "")
+                when = j["last_run"].replace("T", " ")
+                st.markdown(f"**{icon} {jid}** — {when}")
+                output = j.get("last_output", "")
+                if output:
+                    st.code(output[:300], language=None)
+            if st.button("✅ Markeer als gelezen", key="notif_clear"):
+                from datetime import datetime as _dt
+                st.session_state.notif_last_seen = _dt.now().isoformat(timespec="seconds")
+                st.rerun()
+        else:
+            st.caption("Geen nieuwe meldingen.")
+
     # ── Session state defaults (éénmalig laden uit .env) ─────
     if "provider" not in st.session_state:
         st.session_state.provider = get_llm_provider()
