@@ -199,7 +199,7 @@ def start_gui():
                 key="help_cmd_filter",
             )
             q = cmd_filter.strip().lower()
-            html_rows = []
+            html_items = []
             for t in sorted(registry.tools, key=lambda x: x.name):
                 func = registry._functions.get(t.name)
                 if not func:
@@ -209,25 +209,18 @@ def start_gui():
                 doc = (inspect.getdoc(func) or "").split("\n")[0]
                 if q and q not in module and q not in t.name and q not in doc.lower():
                     continue
-                html_rows.append(
-                    f"<tr>"
-                    f"<td style='white-space:nowrap;padding:4px 10px 4px 6px;color:#aaa'>{module}</td>"
-                    f"<td style='white-space:nowrap;padding:4px 10px 4px 6px;font-family:monospace'>/{t.name}{sig}</td>"
-                    f"<td style='padding:4px 6px;word-break:break-word'>{doc}</td>"
-                    f"</tr>"
+                html_items.append(
+                    f"<div style='padding:6px 4px 8px;border-bottom:1px solid #2a2a2a'>"
+                    f"<span style='font-size:0.75rem;color:#888;margin-right:8px'>{module}</span>"
+                    f"<code style='font-size:0.85rem'>/{t.name}{sig}</code>"
+                    f"<div style='margin-top:2px;font-size:0.82rem;color:#bbb'>{doc}</div>"
+                    f"</div>"
                 )
-            if html_rows:
-                table_html = (
-                    "<table style='width:100%;border-collapse:collapse;font-size:0.85rem'>"
-                    "<thead><tr style='border-bottom:1px solid #444'>"
-                    "<th style='text-align:left;padding:4px 10px 6px 6px;width:90px'>Module</th>"
-                    "<th style='text-align:left;padding:4px 10px 6px 6px;width:35%'>Command</th>"
-                    "<th style='text-align:left;padding:4px 6px 6px'>Beschrijving</th>"
-                    "</tr></thead>"
-                    "<tbody>" + "".join(html_rows) + "</tbody>"
-                    "</table>"
+            if html_items:
+                st.markdown(
+                    "<div style='font-family:sans-serif'>" + "".join(html_items) + "</div>",
+                    unsafe_allow_html=True,
                 )
-                st.markdown(table_html, unsafe_allow_html=True)
             else:
                 st.info(f"Geen commands gevonden voor '{cmd_filter}'.")
 
