@@ -163,6 +163,12 @@ def start_gui():
 
         if sub == "📋 Commands":
             st.subheader("📋 Skills & Directe Commands")
+            cmd_filter = st.text_input(
+                "🔍 Filter",
+                placeholder="bijv. github, delete, schedule...",
+                key="help_cmd_filter",
+            )
+            q = cmd_filter.strip().lower()
             html_rows = []
             for t in sorted(registry.tools, key=lambda x: x.name):
                 func = registry._functions.get(t.name)
@@ -171,6 +177,8 @@ def start_gui():
                 module = func.__module__.split(".")[-1]
                 sig = str(inspect.signature(func))
                 doc = (inspect.getdoc(func) or "").split("\n")[0]
+                if q and q not in module and q not in t.name and q not in doc.lower():
+                    continue
                 html_rows.append(
                     f"<tr>"
                     f"<td style='white-space:nowrap;padding:4px 10px 4px 6px;color:#aaa'>{module}</td>"
@@ -178,17 +186,20 @@ def start_gui():
                     f"<td style='padding:4px 6px;word-break:break-word'>{doc}</td>"
                     f"</tr>"
                 )
-            table_html = (
-                "<table style='width:100%;border-collapse:collapse;font-size:0.85rem'>"
-                "<thead><tr style='border-bottom:1px solid #444'>"
-                "<th style='text-align:left;padding:4px 10px 6px 6px;width:90px'>Module</th>"
-                "<th style='text-align:left;padding:4px 10px 6px 6px;width:35%'>Command</th>"
-                "<th style='text-align:left;padding:4px 6px 6px'>Beschrijving</th>"
-                "</tr></thead>"
-                "<tbody>" + "".join(html_rows) + "</tbody>"
-                "</table>"
-            )
-            st.markdown(table_html, unsafe_allow_html=True)
+            if html_rows:
+                table_html = (
+                    "<table style='width:100%;border-collapse:collapse;font-size:0.85rem'>"
+                    "<thead><tr style='border-bottom:1px solid #444'>"
+                    "<th style='text-align:left;padding:4px 10px 6px 6px;width:90px'>Module</th>"
+                    "<th style='text-align:left;padding:4px 10px 6px 6px;width:35%'>Command</th>"
+                    "<th style='text-align:left;padding:4px 6px 6px'>Beschrijving</th>"
+                    "</tr></thead>"
+                    "<tbody>" + "".join(html_rows) + "</tbody>"
+                    "</table>"
+                )
+                st.markdown(table_html, unsafe_allow_html=True)
+            else:
+                st.info(f"Geen commands gevonden voor '{cmd_filter}'.")
 
         else:  # Documentatie
             st.subheader("📚 Skill Documentatie")
