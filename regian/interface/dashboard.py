@@ -1,7 +1,17 @@
 # regian/interface/dashboard.py
 import streamlit as st
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
+from regian.settings import (
+    get_root_dir, set_root_dir,
+    get_llm_provider, set_llm_provider,
+    get_llm_model, set_llm_model,
+    get_confirm_required, set_confirm_required,
+)
 from regian.skills.help import get_help
+
+
+_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
+_OLLAMA_MODELS = ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"]
 
 
 def _handle_slash_command(prompt: str) -> tuple:
@@ -21,42 +31,32 @@ def start_gui():
     st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀")
     st.title("🚀 Regian OS - Control Center")
 
-    # ── Sidebar ───────────────────────────────────────────────
-    st.sidebar.header("Instellingen")
-    provider = st.sidebar.selectbox("LLM Provider (chat)", ["ollama", "gemini"])
-
-    if provider == "gemini":
-        model = st.sidebar.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"])
-    else:
-        model = st.sidebar.selectbox("Ollama Model", ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"])
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📁 Werkmap")
-    from regian.settings import get_root_dir, set_root_dir
-    current_root = get_root_dir()
-    new_root = st.sidebar.text_input("Root directory", value=current_root)
-    if st.sidebar.button("💾 Opslaan"):
-        saved = set_root_dir(new_root)
-        st.sidebar.success(f"Opgeslagen: {saved}")
-    st.sidebar.caption(f"Huidig: `{current_root}`")
-    st.sidebar.markdown("---")
+    # ── Sidebar (minimaal) ────────────────────────────────────
     st.sidebar.caption(f"🔧 {len(registry.tools)} skills geladen")
-
-    if st.sidebar.button("Reset Chat"):
+    if st.sidebar.button("🗑️ Reset Chat"):
         st.session_state.messages = []
         st.rerun()
 
+    # ── Session state defaults (éénmalig laden uit .env) ─────
+    if "provider" not in st.session_state:
+        st.session_state.provider = get_llm_provider()
+    if "model" not in st.session_state:
+        st.session_state.model = get_llm_model()
+
     # ── Agent initialisatie ───────────────────────────────────
-    agent_key = f"{provider}:{model}"
+    agent_key = f"{st.session_state.provider}:{st.session_state.model}"
     if "agent" not in st.session_state or st.session_state.get("agent_key") != agent_key:
-        st.session_state.agent = RegianAgent(provider=provider, model=model)
+        st.session_state.agent = RegianAgent(
+            provider=st.session_state.provider,
+            model=st.session_state.model,
+        )
         st.session_state.agent_key = agent_key
 
     if "orchestrator" not in st.session_state:
         st.session_state.orchestrator = OrchestratorAgent()
 
     # ── Tabs ──────────────────────────────────────────────────
-    tab_chat, tab_help = st.tabs(["💬 Chat", "📖 Help & Commands"])
+    tab_chat, tab_help, tab_settings = st.tabs(["💬 Chat", "📖 Help & Commands", "⚙️ Instellingen"])
 
     # ── CHAT TAB ──────────────────────────────────────────────
     with tab_chat:
@@ -64,6 +64,8 @@ def start_gui():
             st.session_state.messages = []
         if "pending_plan" not in st.session_state:
             st.session_state.pending_plan = None
+
+        confirm_set = CONFIRM_REQUIRED()
 
         # ── HITL: bevestiging afwachten ────────────────────────
         if st.session_state.pending_plan is not None:
@@ -78,7 +80,7 @@ def start_gui():
             for i, step in enumerate(plan, 1):
                 tool = step.get("tool", "")
                 args = step.get("args", {})
-                icon = "🔴" if tool in CONFIRM_REQUIRED else "🟢"
+                icon = "🔴" if tool in confirm_set else "🟢"
                 st.markdown(f"{icon} **Stap {i}:** `{tool}` — {args}")
 
             col1, col2 = st.columns(2)
@@ -119,7 +121,7 @@ def start_gui():
                         plan = st.session_state.orchestrator.plan(prompt)
 
                     # Controleer of plan gevaarlijke stappen bevat
-                    dangerous = [s for s in plan if s.get("tool") in CONFIRM_REQUIRED]
+                    dangerous = [s for s in plan if s.get("tool") in confirm_set]
                     if dangerous:
                         st.session_state.pending_plan = plan
                         st.rerun()
@@ -140,6 +142,66 @@ def start_gui():
         st.subheader("🔍 Skill Documentatie")
         search = st.text_input("Filter op skill", placeholder="bijv. github, files, help...")
         st.markdown(get_help(topic=search))
+
+    # ── INSTELLINGEN TAB ──────────────────────────────────────
+    with tab_settings:
+        st.subheader("⚙️ Instellingen")
+
+        # 1. Werkmap
+        st.markdown("### 📁 Werkmap (Root Directory)")
+        current_root = get_root_dir()
+        new_root = st.text_input("Root directory", value=current_root, key="settings_root")
+        if st.button("💾 Opslaan", key="save_root"):
+            saved = set_root_dir(new_root)
+            st.success(f"✅ Opgeslagen: `{saved}`")
+            st.rerun()
+
+        st.markdown("---")
+
+        # 2. Chat Model
+        st.markdown("### 🤖 Chat Model")
+        provider_options = ["gemini", "ollama"]
+        current_provider = st.session_state.provider
+        new_provider = st.selectbox(
+            "LLM Provider",
+            provider_options,
+            index=provider_options.index(current_provider) if current_provider in provider_options else 0,
+            key="settings_provider",
+        )
+        model_options = _GEMINI_MODELS if new_provider == "gemini" else _OLLAMA_MODELS
+        current_model = st.session_state.model if st.session_state.model in model_options else model_options[0]
+        new_model = st.selectbox(
+            "Model",
+            model_options,
+            index=model_options.index(current_model),
+            key="settings_model",
+        )
+        if st.button("💾 Model opslaan", key="save_model"):
+            set_llm_provider(new_provider)
+            set_llm_model(new_model)
+            st.session_state.provider = new_provider
+            st.session_state.model = new_model
+            if "agent_key" in st.session_state:
+                del st.session_state["agent_key"]
+            st.success(f"✅ Model opgeslagen: `{new_provider} / {new_model}`")
+            st.rerun()
+
+        st.markdown("---")
+
+        # 3. HITL
+        st.markdown("### 🔐 Bevestiging vereist (HITL)")
+        st.caption("Skills waarbij de gebruiker expliciet moet bevestigen vóór uitvoering.")
+        all_skill_names = sorted(t.name for t in registry.tools)
+        current_confirm = get_confirm_required()
+        new_confirm = st.multiselect(
+            "Skills die bevestiging vereisen",
+            options=all_skill_names,
+            default=[s for s in current_confirm if s in all_skill_names],
+            key="settings_confirm",
+        )
+        if st.button("💾 HITL opslaan", key="save_confirm"):
+            set_confirm_required(set(new_confirm))
+            st.success(f"✅ Opgeslagen: {', '.join(sorted(new_confirm)) or '(geen)'}")
 
 
 if __name__ == "__main__":

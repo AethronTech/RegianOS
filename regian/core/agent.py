@@ -10,6 +10,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 import regian.skills as skills_package
+from regian.settings import get_confirm_required
 
 load_dotenv()
 
@@ -103,12 +104,10 @@ class SkillRegistry:
 # Globale registry — gedeeld door orchestrator en agent
 registry = SkillRegistry()
 
-# Tools die expliciete gebruikersbevestiging vereisen (HITL)
-CONFIRM_REQUIRED: set[str] = {
-    "repo_delete",
-    "delete_file",
-    "delete_directory",
-}
+# Tools die expliciete gebruikersbevestiging vereisen (HITL) — geladen uit .env
+def CONFIRM_REQUIRED() -> set[str]:
+    """Lees altijd de actuele waarde uit .env (live, geen herstart nodig)."""
+    return get_confirm_required()
 
 
 # ── ORCHESTRATOR ───────────────────────────────────────────────────────────────
