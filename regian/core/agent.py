@@ -133,6 +133,8 @@ class OrchestratorAgent:
         else:
             base_llm = ChatOllama(model="mistral", temperature=0)
         self.llm = base_llm.bind_tools(self.tools, tool_choice="any")
+        # llm_free: model mag zelf kiezen of het een tool aanroept (voor vervolg-stappen)
+        self.llm_free = base_llm.bind_tools(self.tools)
 
     def run(self, prompt: str) -> str:
         try:
@@ -140,28 +142,38 @@ class OrchestratorAgent:
                 SystemMessage(content=ORCHESTRATOR_PROMPT),
                 HumanMessage(content=prompt),
             ]
-            for _ in range(5):
-                response = self.llm.invoke(messages)
+            all_results = []
+            # Eerste aanroep: forceer tool-selectie
+            forced_llm = self.llm  # tool_choice="any"
+            for i in range(8):
+                llm_to_use = forced_llm if i == 0 else self.llm_free
+                response = llm_to_use.invoke(messages)
                 messages.append(response)
+
                 if response.tool_calls:
                     seen = set()
-                    results = []
                     for tc in response.tool_calls:
                         key = (tc["name"], str(tc["args"]))
                         if key in seen:
                             continue
                         seen.add(key)
                         result = registry.call(tc["name"], tc["args"])
-                        results.append(result)
+                        all_results.append(result)
                         messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
-                    # Geef resultaten direct terug — geen tweede LLM-call
-                    # (Gemini 2.5 geeft lege content terug bij samenvatting)
-                    return "\n\n".join(results)
-                content = response.content
-                if content and content.strip():
-                    return content.strip()
-                # model gaf lege respons (bv. Gemini thinking) — herhaal
-            return "⚠️ Het model gaf geen antwoord. Probeer opnieuw of gebruik een /command."
+                else:
+                    # Model geeft tekst terug → klaar
+                    content = response.content
+                    # Gemini kan content als lijst teruggeven
+                    if isinstance(content, list):
+                        content = " ".join(str(c) for c in content if c)
+                    if content and str(content).strip():
+                        return str(content).strip()
+                    # Geen tekst na tool-uitvoering → geef ruwe resultaten
+                    if all_results:
+                        return "\n\n".join(all_results)
+                    break
+
+            return "\n\n".join(all_results) if all_results else "⚠️ Het model gaf geen antwoord."
         except Exception as e:
             return f"Orchestrator Fout: {str(e)}"
 
@@ -215,8 +227,10 @@ class RegianAgent:
                         messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
                     return "\n\n".join(results)
                 content = response.content
-                if content and content.strip():
-                    return content.strip()
+                if isinstance(content, list):
+                    content = " ".join(str(c) for c in content if c)
+                if content and str(content).strip():
+                    return str(content).strip()
             return "⚠️ Het model gaf geen antwoord. Probeer opnieuw."
         except Exception as e:
             return f"Agent Fout: {str(e)}"
