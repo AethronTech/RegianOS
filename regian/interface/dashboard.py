@@ -1,6 +1,11 @@
 # regian/interface/dashboard.py
 import streamlit as st
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
+from regian.core.scheduler import (
+    get_scheduler, get_all_jobs, get_next_run,
+    add_scheduled_job, remove_scheduled_job, toggle_scheduled_job,
+    run_job_now_by_id, parse_schedule,
+)
 from regian.settings import (
     get_root_dir, set_root_dir,
     get_llm_provider, set_llm_provider,
@@ -26,6 +31,12 @@ def get_agent(provider: str, model: str):
     return RegianAgent(provider=provider, model=model)
 
 
+@st.cache_resource
+def _start_scheduler():
+    """Start de achtergrond-scheduler éénmalig bij het laden van de app."""
+    return get_scheduler()
+
+
 def _handle_slash_command(prompt: str) -> tuple:
     """
     Parst '/function_name [args]' en roept de juiste skill aan via de registry.
@@ -44,6 +55,7 @@ def start_gui():
     st.title("🚀 Regian OS - Control Center")
 
     # ── Sidebar (minimaal) ────────────────────────────────────
+    _start_scheduler()  # start achtergrond-scheduler éénmalig
     st.sidebar.caption(f"🔧 {len(registry.tools)} skills geladen")
     if st.sidebar.button("🗑️ Reset Chat"):
         st.session_state.messages = []
@@ -56,7 +68,9 @@ def start_gui():
         st.session_state.model = get_llm_model()
 
     # ── Tabs ──────────────────────────────────────────────────
-    tab_chat, tab_help, tab_settings = st.tabs(["💬 Chat", "📖 Help & Commands", "⚙️ Instellingen"])
+    tab_chat, tab_help, tab_cron, tab_settings = st.tabs([
+        "💬 Chat", "📖 Help & Commands", "📅 Cron", "⚙️ Instellingen"
+    ])
 
     # ── CHAT TAB ──────────────────────────────────────────────
     with tab_chat:
@@ -142,6 +156,126 @@ def start_gui():
         st.subheader("🔍 Skill Documentatie")
         search = st.text_input("Filter op skill", placeholder="bijv. github, files, help...")
         st.markdown(get_help(topic=search))
+
+    # ── CRON TAB ─────────────────────────────────────────────────
+    with tab_cron:
+        st.subheader("📅 Geplande Taken")
+
+        # ── Nieuwe taak aanmaken ─────────────────────────────
+        with st.expander("➕ Nieuwe taak toevoegen", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_id = st.text_input("Naam (job_id)", placeholder="bijv. dagelijkse_backup", key="cron_new_id")
+                new_type = st.selectbox("Type", ["/command", "shell", "AI-prompt"], key="cron_new_type")
+                new_schedule = st.text_input(
+                    "Schema",
+                    placeholder="bijv. dagelijks om 09:00 | elke 15 minuten | 0 9 * * 1-5",
+                    key="cron_new_schedule",
+                )
+            with col2:
+                new_task = st.text_area(
+                    "Taak",
+                    placeholder={
+                        "/command": "/repo_list  of  /run_shell git status",
+                        "shell":    "git pull  of  python3 script.py",
+                        "AI-prompt": "Controleer open issues en maak een samenvatting",
+                    }.get(new_type, ""),
+                    key="cron_new_task",
+                    height=80,
+                )
+                new_desc = st.text_input("Beschrijving (optioneel)", key="cron_new_desc")
+
+            # Schedule-formaten helper
+            with st.expander("ℹ️ Geldige schema-formaten"):
+                st.markdown("""
+| Formaat | Voorbeeld |
+|---|---|
+| Interval | `elke 5 minuten` \u00b7 `elk uur` \u00b7 `elke 2 uur` |
+| Dagelijks | `dagelijks om 09:00` |
+| Dag van week | `elke maandag om 08:00` |
+| Werkdagen | `werkdagen om 07:30` |
+| Cron expressie | `0 9 * * 1-5` |
+""")
+
+            if st.button("💾 Taak opslaan", key="cron_save"):
+                if not new_id or not new_task or not new_schedule:
+                    st.error("❌ Vul naam, taak en schema in.")
+                else:
+                    type_map = {"/command": "command", "shell": "shell", "AI-prompt": "prompt"}
+                    job_type = type_map[new_type]
+                    task = new_task.strip()
+                    if job_type == "command" and not task.startswith("/"):
+                        task = "/" + task
+                    try:
+                        parse_schedule(new_schedule)  # valideer eerst
+                        result = add_scheduled_job(
+                            job_id=new_id.strip().replace(" ", "_"),
+                            task=task,
+                            job_type=job_type,
+                            schedule=new_schedule.strip(),
+                            description=new_desc.strip(),
+                        )
+                        st.success(f"✅ Taak '{result}' aangemaakt!")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"❌ Ongeldig schema: {e}")
+
+        st.markdown("---")
+
+        # ── Overzicht bestaande taken ──────────────────────────
+        jobs = get_all_jobs()
+        if not jobs:
+            st.info("Geen geplande taken. Voeg er een toe via het formulier hierboven.")
+        else:
+            st.caption(f"{len(jobs)} taak(en) geconfigureerd")
+            for job_id, job in sorted(jobs.items()):
+                enabled = job.get("enabled", True)
+                job_type = job.get("type", "command")
+                type_icon = {"⚡", "🖥️", "🧠"}.pop if False else {
+                    "command": "⚡", "shell": "🖥️", "prompt": "🧠"
+                }.get(job_type, "📅")
+                status_icon = "🟢" if enabled else "⏸️"
+                next_run = get_next_run(job_id) if enabled else "—"
+                last_run = job.get("last_run") or "—"
+                last_status = job.get("last_status") or ""
+
+                with st.container(border=True):
+                    h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 3])
+                    with h1:
+                        st.markdown(f"{status_icon} **{job_id}** {type_icon}")
+                        st.caption(job.get("description", ""))
+                    with h2:
+                        st.caption("Schema")
+                        st.code(job.get("schedule", ""), language=None)
+                    with h3:
+                        st.caption("Volgende run")
+                        st.text(next_run)
+                    with h4:
+                        st.caption("Laatste run")
+                        st.text(f"{last_run} {last_status}")
+                    with h5:
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            if st.button("▶️", key=f"run_{job_id}", help="Nu uitvoeren"):
+                                run_job_now_by_id(job_id)
+                                st.toast(f"⚡ '{job_id}' uitgevoerd")
+                                st.rerun()
+                        with c2:
+                            lbl = "⏸️" if enabled else "▶️"
+                            hlp = "Pauzeren" if enabled else "Activeren"
+                            if st.button(lbl, key=f"tog_{job_id}", help=hlp):
+                                toggle_scheduled_job(job_id, not enabled)
+                                st.rerun()
+                        with c3:
+                            if st.button("🗑️", key=f"del_{job_id}", help="Verwijderen"):
+                                remove_scheduled_job(job_id)
+                                st.rerun()
+
+                    # Output van laatste run
+                    last_output = job.get("last_output")
+                    if last_output:
+                        with st.expander("📄 Laatste output"):
+                            st.code(last_output, language=None)
 
     # ── INSTELLINGEN TAB ──────────────────────────────────────
     with tab_settings:

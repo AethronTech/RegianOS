@@ -1,6 +1,9 @@
-langchain
-langchain-openai
+langchain-core
+langchain-ollama
+langchain-google-genai
+streamlit
 PyGithub
 python-dotenv
 prompt_toolkit
 typer
+apscheduler

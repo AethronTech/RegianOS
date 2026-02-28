@@ -19,6 +19,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from regian.core.agent import registry, OrchestratorAgent, CONFIRM_REQUIRED
 
 
+def _ensure_scheduler():
+    """Start de achtergrond-scheduler als hij nog niet loopt."""
+    try:
+        from regian.core.scheduler import get_scheduler
+        get_scheduler()
+    except Exception:
+        pass
+
+
 # ── Stijl ──────────────────────────────────────────────────────────────────────
 
 STYLE = Style.from_dict({
@@ -139,6 +148,7 @@ def start_cli():
         style=STYLE,
     )
     orchestrator = OrchestratorAgent()
+    _ensure_scheduler()
 
     _print("🚀 Regian OS CLI", "success")
     _print("   Typ een opdracht voor de agent, of gebruik /command (Tab = auto-complete).", "info")
