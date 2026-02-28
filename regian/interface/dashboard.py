@@ -1,6 +1,6 @@
 # regian/interface/dashboard.py
 import streamlit as st
-from regian.core.agent import registry, OrchestratorAgent, RegianAgent
+from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
 from regian.skills.help import get_help
 
 
@@ -26,7 +26,7 @@ def start_gui():
     provider = st.sidebar.selectbox("LLM Provider (chat)", ["ollama", "gemini"])
 
     if provider == "gemini":
-        model = st.sidebar.selectbox("Gemini Model", ["gemini-1.5-flash", "gemini-1.5-pro"])
+        model = st.sidebar.selectbox("Gemini Model", ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"])
     else:
         model = st.sidebar.selectbox("Ollama Model", ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"])
 
@@ -62,27 +62,75 @@ def start_gui():
     with tab_chat:
         if "messages" not in st.session_state:
             st.session_state.messages = []
+        if "pending_plan" not in st.session_state:
+            st.session_state.pending_plan = None
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+        # ── HITL: bevestiging afwachten ────────────────────────
+        if st.session_state.pending_plan is not None:
+            plan = st.session_state.pending_plan
 
-        if prompt := st.chat_input("Wat gaan we doen? (Typ / voor directe commands)"):
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            # Toon chatgeschiedenis als context
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-            with st.chat_message("assistant"):
+            st.warning("⚠️ **Bevestiging vereist** — dit plan bevat destructieve operaties:")
+            for i, step in enumerate(plan, 1):
+                tool = step.get("tool", "")
+                args = step.get("args", {})
+                icon = "🔴" if tool in CONFIRM_REQUIRED else "🟢"
+                st.markdown(f"{icon} **Stap {i}:** `{tool}` — {args}")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Bevestigen & uitvoeren", type="primary"):
+                    result = st.session_state.orchestrator.execute_plan(plan)
+                    st.session_state.messages.append({"role": "assistant", "content": result})
+                    st.session_state.pending_plan = None
+                    st.rerun()
+            with col2:
+                if st.button("❌ Annuleren"):
+                    st.session_state.messages.append({"role": "assistant", "content": "❌ Opdracht geannuleerd."})
+                    st.session_state.pending_plan = None
+                    st.rerun()
+
+        else:
+            # ── Normale chat ───────────────────────────────────────
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    if message.get("badge"):
+                        st.info(f"Direct: {message['badge']}")
+                    st.markdown(message["content"])
+
+            if prompt := st.chat_input("Wat gaan we doen? (Typ / voor directe commands)"):
+                st.session_state.messages.append({"role": "user", "content": prompt})
+
+                badge = None
                 if prompt.startswith("/"):
-                    # Dynamisch via registry — geen hardcoded skill-imports
-                    response, badge = _handle_slash_command(prompt)
-                    st.info(f"Direct: {badge}")
+                    stripped = prompt[1:].strip()
+                    if not stripped:
+                        response = registry.list_commands()
+                    else:
+                        response, badge = _handle_slash_command(prompt)
+                    st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
+                    st.rerun()
                 else:
-                    with st.spinner("Orchestrator is aan het werk..."):
-                        response = st.session_state.orchestrator.run(prompt)
+                    with st.spinner("Planner is aan het werk..."):
+                        plan = st.session_state.orchestrator.plan(prompt)
 
-                st.markdown(response)
-                st.session_state.messages.append({"role": "assistant", "content": response})
+                    # Controleer of plan gevaarlijke stappen bevat
+                    dangerous = [s for s in plan if s.get("tool") in CONFIRM_REQUIRED]
+                    if dangerous:
+                        st.session_state.pending_plan = plan
+                        st.rerun()
+                    else:
+                        with st.spinner("Uitvoeren..."):
+                            if plan:
+                                response = st.session_state.orchestrator.execute_plan(plan)
+                            else:
+                                response = st.session_state.orchestrator.run(prompt)
+                        st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
+                        st.rerun()
 
     # ── HELP TAB ──────────────────────────────────────────────
     with tab_help:

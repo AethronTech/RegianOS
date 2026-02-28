@@ -103,10 +103,15 @@ class SkillRegistry:
 # Globale registry — gedeeld door orchestrator en agent
 registry = SkillRegistry()
 
+# Tools die expliciete gebruikersbevestiging vereisen (HITL)
+CONFIRM_REQUIRED: set[str] = {
+    "repo_delete",
+    "delete_file",
+    "delete_directory",
+}
+
 
 # ── ORCHESTRATOR ───────────────────────────────────────────────────────────────
-# Lichtgewicht agent die ALTIJD een snel/goedkoop model gebruikt
-# voor betrouwbare tool-routing. Onafhankelijk van de gebruikerskeuze.
 
 PLANNER_PROMPT = """Je bent een taakplanner. Analyseer de opdracht en maak een takenlijst.
 
@@ -152,7 +157,8 @@ class OrchestratorAgent:
             lines.append(f"- {t.name}{sig}: {t.description.splitlines()[0]}")
         return "\n".join(lines)
 
-    def _plan(self, prompt: str) -> list:
+    def plan(self, prompt: str) -> list:
+        """Fase 1: analyseer de opdracht en geef een geordende takenlijst terug."""
         catalog = self._tool_catalog()
         system = PLANNER_PROMPT.format(tool_catalog=catalog)
         response = self.base_llm.invoke([
@@ -163,7 +169,6 @@ class OrchestratorAgent:
         if isinstance(content, list):
             content = " ".join(str(c) for c in content if c)
         content = content.strip()
-        # Strip markdown code fences als aanwezig
         content = re.sub(r"^```[a-z]*\n?", "", content)
         content = re.sub(r"\n?```$", "", content)
         try:
@@ -174,12 +179,21 @@ class OrchestratorAgent:
             pass
         return []
 
-    def run(self, prompt: str) -> str:
-        try:
-            plan = self._plan(prompt)
+    def execute_plan(self, plan: list) -> str:
+        """Fase 2: voer een takenlijst deterministisch uit en geef resultaten terug."""
+        results = []
+        for step in plan:
+            tool_name = step.get("tool", "")
+            args = step.get("args", {})
+            result = registry.call(tool_name, args)
+            results.append(f"✅ **{tool_name}**: {result}")
+        return "\n\n".join(results) if results else "Geen taken uitgevoerd."
 
+    def run(self, prompt: str) -> str:
+        """Plan + execute in één stap (enkel voor taken zonder HITL-tools)."""
+        try:
+            plan = self.plan(prompt)
             if not plan:
-                # Geen tools nodig — gewone LLM-vraag
                 response = self.base_llm.invoke([
                     SystemMessage(content="Je bent Regian, een AI-assistent van AethronTech. Antwoord bondig in het Nederlands."),
                     HumanMessage(content=prompt),
@@ -188,17 +202,7 @@ class OrchestratorAgent:
                 if isinstance(content, list):
                     content = " ".join(str(c) for c in content if c)
                 return str(content).strip()
-
-            # Voer elke taak uit in volgorde
-            results = []
-            for step in plan:
-                tool_name = step.get("tool", "")
-                args = step.get("args", {})
-                result = registry.call(tool_name, args)
-                results.append(f"✅ **{tool_name}**: {result}")
-
-            return "\n\n".join(results)
-
+            return self.execute_plan(plan)
         except Exception as e:
             return f"Orchestrator Fout: {str(e)}"
 
