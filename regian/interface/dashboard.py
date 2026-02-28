@@ -54,7 +54,7 @@ def _handle_slash_command(prompt: str) -> tuple:
 
 
 def start_gui():
-    st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀")
+    st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀", layout="wide")
     st.title("🚀 Regian OS - Control Center")
 
     # ── Sidebar (minimaal) ────────────────────────────────────
@@ -180,10 +180,11 @@ def start_gui():
                 rows,
                 use_container_width=True,
                 hide_index=True,
+                height=min(36 * len(rows) + 38, 700),
                 column_config={
-                    "Module":       st.column_config.TextColumn(width="small"),
-                    "Command":      st.column_config.TextColumn(width="medium"),
-                    "Beschrijving": st.column_config.TextColumn(width="large"),
+                    "Module":       st.column_config.TextColumn("Module",       width=90),
+                    "Command":      st.column_config.TextColumn("Command",      width=320),
+                    "Beschrijving": st.column_config.TextColumn("Beschrijving", width=None),
                 },
             )
 
