@@ -125,10 +125,14 @@ class OrchestratorAgent:
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
             base_llm = ChatGoogleGenerativeAI(
-                model="gemini-1.5-flash", temperature=0, google_api_key=gemini_key)
+                model="gemini-2.5-flash",
+                temperature=1,  # vereist bij thinking_budget=0
+                google_api_key=gemini_key,
+                model_kwargs={"thinking": {"thinking_budget": 0}},
+            )
         else:
             base_llm = ChatOllama(model="mistral", temperature=0)
-        self.llm = base_llm.bind_tools(self.tools)
+        self.llm = base_llm.bind_tools(self.tools, tool_choice="any")
 
     def run(self, prompt: str) -> str:
         try:
@@ -150,10 +154,14 @@ class OrchestratorAgent:
                         result = registry.call(tc["name"], tc["args"])
                         results.append(result)
                         messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
-                    final = self.llm.invoke(messages)
-                    return final.content.strip() if final.content and final.content.strip() else "\n".join(results)
-                return response.content
-            return response.content
+                    # Geef resultaten direct terug — geen tweede LLM-call
+                    # (Gemini 2.5 geeft lege content terug bij samenvatting)
+                    return "\n\n".join(results)
+                content = response.content
+                if content and content.strip():
+                    return content.strip()
+                # model gaf lege respons (bv. Gemini thinking) — herhaal
+            return "⚠️ Het model gaf geen antwoord. Probeer opnieuw of gebruik een /command."
         except Exception as e:
             return f"Orchestrator Fout: {str(e)}"
 
@@ -173,11 +181,17 @@ class RegianAgent:
         self.tools = registry.tools
         self.tool_map = registry.tool_map
         if provider == "gemini":
+            # thinking_budget=0: schakel thinking uit voor betrouwbare tool-calling
+            model_kwargs = {"thinking": {"thinking_budget": 0}} if model.startswith("gemini-2.5") else {}
             base_llm = ChatGoogleGenerativeAI(
-                model=model, temperature=0, google_api_key=os.getenv("GEMINI_API_KEY"))
+                model=model,
+                temperature=1,  # vereist door API wanneer thinking_budget=0
+                google_api_key=os.getenv("GEMINI_API_KEY"),
+                model_kwargs=model_kwargs,
+            )
         else:
             base_llm = ChatOllama(model=model, temperature=0)
-        self.llm = base_llm.bind_tools(self.tools)
+        self.llm = base_llm.bind_tools(self.tools, tool_choice="any")
 
     def ask(self, prompt: str) -> str:
         try:
@@ -199,9 +213,10 @@ class RegianAgent:
                         result = registry.call(tc["name"], tc["args"])
                         results.append(result)
                         messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
-                    final = self.llm.invoke(messages)
-                    return final.content.strip() if final.content and final.content.strip() else "\n".join(results)
-                return response.content
-            return response.content
+                    return "\n\n".join(results)
+                content = response.content
+                if content and content.strip():
+                    return content.strip()
+            return "⚠️ Het model gaf geen antwoord. Probeer opnieuw."
         except Exception as e:
             return f"Agent Fout: {str(e)}"
