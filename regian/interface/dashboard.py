@@ -1,5 +1,9 @@
 # regian/interface/dashboard.py
+import importlib
+import inspect
+import pkgutil
 import streamlit as st
+import regian.skills as _skills_pkg
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
 from regian.core.scheduler import (
     get_scheduler, get_all_jobs, get_next_run,
@@ -12,7 +16,6 @@ from regian.settings import (
     get_llm_model, set_llm_model,
     get_confirm_required, set_confirm_required,
 )
-from regian.skills.help import get_help
 
 
 _GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
@@ -150,12 +153,79 @@ def start_gui():
 
     # ── HELP TAB ──────────────────────────────────────────────
     with tab_help:
-        st.subheader("📖 Skills & Directe Commands")
-        st.markdown(registry.list_commands())
-        st.markdown("---")
-        st.subheader("🔍 Skill Documentatie")
-        search = st.text_input("Filter op skill", placeholder="bijv. github, files, help...")
-        st.markdown(get_help(topic=search))
+        sub = st.radio(
+            "",
+            ["📋 Commands", "📚 Documentatie"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="help_sub",
+        )
+
+        if sub == "📋 Commands":
+            st.subheader("📋 Skills & Directe Commands")
+            rows = []
+            for t in sorted(registry.tools, key=lambda x: x.name):
+                func = registry._functions.get(t.name)
+                if not func:
+                    continue
+                module = func.__module__.split(".")[-1]
+                sig = str(inspect.signature(func))
+                doc = (inspect.getdoc(func) or "").split("\n")[0]
+                rows.append({
+                    "Module": module,
+                    "Command": f"/{t.name}{sig}",
+                    "Beschrijving": doc,
+                })
+            st.dataframe(
+                rows,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Module":       st.column_config.TextColumn(width="small"),
+                    "Command":      st.column_config.TextColumn(width="medium"),
+                    "Beschrijving": st.column_config.TextColumn(width="large"),
+                },
+            )
+
+        else:  # Documentatie
+            st.subheader("📚 Skill Documentatie")
+            search = st.text_input(
+                "🔍 Filter",
+                placeholder="bijv. github, files, cron, create_skill...",
+                key="help_doc_filter",
+            )
+            q = search.strip().lower()
+
+            for _, mod_name, _ in pkgutil.iter_modules(
+                _skills_pkg.__path__, _skills_pkg.__name__ + "."
+            ):
+                module = importlib.import_module(mod_name)
+                short = mod_name.split(".")[-1]
+
+                all_funcs = [
+                    (name, func)
+                    for name, func in inspect.getmembers(module, inspect.isfunction)
+                    if not name.startswith("_") and func.__module__ == module.__name__
+                ]
+                if not all_funcs:
+                    continue
+
+                if q:
+                    funcs = [
+                        (n, f) for n, f in all_funcs
+                        if q in short.lower() or q in n.lower() or q in (inspect.getdoc(f) or "").lower()
+                    ]
+                    if not funcs:
+                        continue
+                else:
+                    funcs = all_funcs
+
+                with st.expander(f"🔧 **{short}** &nbsp;·&nbsp; {len(funcs)} functie(s)"):
+                    for name, func in funcs:
+                        sig = str(inspect.signature(func))
+                        doc = inspect.getdoc(func) or "Geen beschrijving."
+                        st.markdown(f"**`/{name}{sig}`**")
+                        st.caption(doc)
 
     # ── CRON TAB ─────────────────────────────────────────────────
     with tab_cron:
