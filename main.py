@@ -15,7 +15,9 @@ def main():
         subprocess.run(
             [sys.executable, "-m", "streamlit", "run", dashboard_path,
              "--server.headless=true",
-             "--server.address=0.0.0.0"],
+             "--server.address=0.0.0.0",
+             "--server.enableCORS=false",
+             "--server.enableXsrfProtection=false"],
             check=True
         )
     except subprocess.CalledProcessError as e:
