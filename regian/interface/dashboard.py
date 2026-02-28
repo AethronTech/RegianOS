@@ -163,7 +163,7 @@ def start_gui():
 
         if sub == "📋 Commands":
             st.subheader("📋 Skills & Directe Commands")
-            rows = []
+            html_rows = []
             for t in sorted(registry.tools, key=lambda x: x.name):
                 func = registry._functions.get(t.name)
                 if not func:
@@ -171,22 +171,24 @@ def start_gui():
                 module = func.__module__.split(".")[-1]
                 sig = str(inspect.signature(func))
                 doc = (inspect.getdoc(func) or "").split("\n")[0]
-                rows.append({
-                    "Module": module,
-                    "Command": f"/{t.name}{sig}",
-                    "Beschrijving": doc,
-                })
-            st.dataframe(
-                rows,
-                use_container_width=True,
-                hide_index=True,
-                height=min(36 * len(rows) + 38, 700),
-                column_config={
-                    "Module":       st.column_config.TextColumn("Module",       width=90),
-                    "Command":      st.column_config.TextColumn("Command",      width=320),
-                    "Beschrijving": st.column_config.TextColumn("Beschrijving", width=None),
-                },
+                html_rows.append(
+                    f"<tr>"
+                    f"<td style='white-space:nowrap;padding:4px 10px 4px 6px;color:#aaa'>{module}</td>"
+                    f"<td style='white-space:nowrap;padding:4px 10px 4px 6px;font-family:monospace'>/{t.name}{sig}</td>"
+                    f"<td style='padding:4px 6px;word-break:break-word'>{doc}</td>"
+                    f"</tr>"
+                )
+            table_html = (
+                "<table style='width:100%;border-collapse:collapse;font-size:0.85rem'>"
+                "<thead><tr style='border-bottom:1px solid #444'>"
+                "<th style='text-align:left;padding:4px 10px 6px 6px;width:90px'>Module</th>"
+                "<th style='text-align:left;padding:4px 10px 6px 6px;width:35%'>Command</th>"
+                "<th style='text-align:left;padding:4px 6px 6px'>Beschrijving</th>"
+                "</tr></thead>"
+                "<tbody>" + "".join(html_rows) + "</tbody>"
+                "</table>"
             )
+            st.markdown(table_html, unsafe_allow_html=True)
 
         else:  # Documentatie
             st.subheader("📚 Skill Documentatie")
