@@ -30,17 +30,18 @@ def _inject_autocomplete():
     cmd_json = json.dumps(commands)
     _components.html(f"""<script>
 (function(){{
+  var doc = window.parent.document;
+  var win = window.parent;
   var COMMANDS = {cmd_json};
-  var _setup = false;
 
   function getInput() {{
-    return document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+    return doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
   }}
 
   function getOrCreateDropdown() {{
-    var dd = document.getElementById('regian-ac');
+    var dd = doc.getElementById('regian-ac');
     if (!dd) {{
-      dd = document.createElement('div');
+      dd = doc.createElement('div');
       dd.id = 'regian-ac';
       dd.style.cssText = [
         'position:fixed',
@@ -56,7 +57,7 @@ def _inject_autocomplete():
         'display:none',
         'min-width:280px'
       ].join(';');
-      document.body.appendChild(dd);
+      doc.body.appendChild(dd);
     }}
     return dd;
   }}
@@ -64,9 +65,9 @@ def _inject_autocomplete():
   var selectedIdx = -1;
 
   function setValue(input, val) {{
-    var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    var setter = Object.getOwnPropertyDescriptor(win.HTMLTextAreaElement.prototype, 'value').set;
     setter.call(input, val);
-    input.dispatchEvent(new Event('input', {{bubbles:true}}));
+    input.dispatchEvent(new win.Event('input', {{bubbles:true}}));
   }}
 
   function render(matches, dd, input) {{
@@ -74,7 +75,7 @@ def _inject_autocomplete():
     selectedIdx = -1;
     if (!matches.length) {{ dd.style.display = 'none'; return; }}
     matches.slice(0, 12).forEach(function(cmd, i) {{
-      var item = document.createElement('div');
+      var item = doc.createElement('div');
       item.textContent = '/' + cmd;
       item.dataset.cmd = cmd;
       item.style.cssText = 'padding:8px 14px;cursor:pointer;border-bottom:1px solid #2a2a3a;color:#e0e0e0';
@@ -88,9 +89,9 @@ def _inject_autocomplete():
       dd.appendChild(item);
     }});
     var rect = input.getBoundingClientRect();
-    dd.style.left  = rect.left + 'px';
-    dd.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
-    dd.style.width = Math.max(rect.width, 280) + 'px';
+    dd.style.left   = rect.left + 'px';
+    dd.style.bottom = (win.innerHeight - rect.top + 6) + 'px';
+    dd.style.width  = Math.max(rect.width, 280) + 'px';
     dd.style.display = 'block';
   }}
 
@@ -115,7 +116,7 @@ def _inject_autocomplete():
     }});
 
     input.addEventListener('keydown', function(e) {{
-      var dd = document.getElementById('regian-ac');
+      var dd = doc.getElementById('regian-ac');
       if (!dd || dd.style.display === 'none') return;
       var items = dd.querySelectorAll('div');
       if (e.key === 'ArrowDown') {{
@@ -136,21 +137,19 @@ def _inject_autocomplete():
     }});
 
     input.addEventListener('blur', function() {{
-      var dd = document.getElementById('regian-ac');
+      var dd = doc.getElementById('regian-ac');
       if (dd) setTimeout(function() {{ dd.style.display = 'none'; }}, 200);
     }});
   }}
 
-  // Poll voor Streamlit rerenders
   setInterval(function() {{
     var input = getInput();
     if (input) setupInput(input);
   }}, 500);
 
-  var input = getInput();
-  if (input) setupInput(input);
 }})();
 </script>""", height=0)
+
 
 
 @st.cache_resource
