@@ -4,6 +4,7 @@ import inspect
 import json
 import pkgutil
 import streamlit as st
+import streamlit.components.v1 as _components
 import regian.skills as _skills_pkg
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
 from regian.core.scheduler import (
@@ -27,8 +28,7 @@ def _inject_autocomplete():
     """Injecteer JS autocomplete dropdown voor slash commands in de chat input."""
     commands = sorted(t.name for t in registry.tools)
     cmd_json = json.dumps(commands)
-    st.markdown(f"""
-<script>
+    _components.html(f"""<script>
 (function(){{
   var COMMANDS = {cmd_json};
   var _setup = false;
@@ -150,8 +150,7 @@ def _inject_autocomplete():
   var input = getInput();
   if (input) setupInput(input);
 }})();
-</script>
-""", unsafe_allow_html=True)
+</script>""", height=0)
 
 
 @st.cache_resource
@@ -317,7 +316,7 @@ def start_gui():
     # ── HELP TAB ──────────────────────────────────────────────
     with tab_help:
         sub = st.radio(
-            "",
+            "Weergave",
             ["📋 Commands", "📚 Documentatie"],
             horizontal=True,
             label_visibility="collapsed",
