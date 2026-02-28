@@ -14,6 +14,18 @@ _GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gem
 _OLLAMA_MODELS = ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"]
 
 
+@st.cache_resource
+def get_orchestrator():
+    """Éénmalig aangemaakt voor de hele server — niet per sessie."""
+    return OrchestratorAgent()
+
+
+@st.cache_resource
+def get_agent(provider: str, model: str):
+    """Éénmalig aangemaakt per provider+model combinatie."""
+    return RegianAgent(provider=provider, model=model)
+
+
 def _handle_slash_command(prompt: str) -> tuple:
     """
     Parst '/function_name [args]' en roept de juiste skill aan via de registry.
@@ -42,18 +54,6 @@ def start_gui():
         st.session_state.provider = get_llm_provider()
     if "model" not in st.session_state:
         st.session_state.model = get_llm_model()
-
-    # ── Agent initialisatie ───────────────────────────────────
-    agent_key = f"{st.session_state.provider}:{st.session_state.model}"
-    if "agent" not in st.session_state or st.session_state.get("agent_key") != agent_key:
-        st.session_state.agent = RegianAgent(
-            provider=st.session_state.provider,
-            model=st.session_state.model,
-        )
-        st.session_state.agent_key = agent_key
-
-    if "orchestrator" not in st.session_state:
-        st.session_state.orchestrator = OrchestratorAgent()
 
     # ── Tabs ──────────────────────────────────────────────────
     tab_chat, tab_help, tab_settings = st.tabs(["💬 Chat", "📖 Help & Commands", "⚙️ Instellingen"])
@@ -86,7 +86,7 @@ def start_gui():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ Bevestigen & uitvoeren", type="primary"):
-                    result = st.session_state.orchestrator.execute_plan(plan)
+                    result = get_orchestrator().execute_plan(plan)
                     st.session_state.messages.append({"role": "assistant", "content": result})
                     st.session_state.pending_plan = None
                     st.rerun()
@@ -118,7 +118,7 @@ def start_gui():
                     st.rerun()
                 else:
                     with st.spinner("Planner is aan het werk..."):
-                        plan = st.session_state.orchestrator.plan(prompt)
+                        plan = get_orchestrator().plan(prompt)
 
                     # Controleer of plan gevaarlijke stappen bevat
                     dangerous = [s for s in plan if s.get("tool") in confirm_set]
@@ -128,9 +128,9 @@ def start_gui():
                     else:
                         with st.spinner("Uitvoeren..."):
                             if plan:
-                                response = st.session_state.orchestrator.execute_plan(plan)
+                                response = get_orchestrator().execute_plan(plan)
                             else:
-                                response = st.session_state.orchestrator.run(prompt)
+                                response = get_orchestrator().run(prompt)
                         st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
                         st.rerun()
 
@@ -181,8 +181,7 @@ def start_gui():
             set_llm_model(new_model)
             st.session_state.provider = new_provider
             st.session_state.model = new_model
-            if "agent_key" in st.session_state:
-                del st.session_state["agent_key"]
+            get_agent.clear()  # verwijder gecachede agent zodat nieuwe aangemaakt wordt
             st.success(f"✅ Model opgeslagen: `{new_provider} / {new_model}`")
             st.rerun()
 
