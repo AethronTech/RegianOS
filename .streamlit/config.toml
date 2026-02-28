@@ -6,4 +6,6 @@ enableCORS = false
 enableXsrfProtection = false
 
 [browser]
+serverAddress = "dirks-mac-studio.tail3436d8.ts.net"
+serverPort = 8501
 gatherUsageStats = false
