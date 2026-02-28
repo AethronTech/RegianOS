@@ -100,6 +100,25 @@ class SkillRegistry:
             lines.append(f"  `/{t.name}{sig}`")
         return "\n".join(lines)
 
+    def reload(self):
+        """Herlaad alle skill-modules (opgelet: importlib cache wordt geleegd)."""
+        import sys
+        # Verwijder gecachede skill-modules zodat importlib ze opnieuw inlaadt
+        to_remove = [k for k in sys.modules if k.startswith("regian.skills.")]
+        for k in to_remove:
+            del sys.modules[k]
+        self._discover()
+        return f"Registry herladen: {len(self._tools)} skills geladen."
+
+    def skill_modules(self) -> list[str]:
+        """Geeft een lijst van alle geladen skill-modulenamen."""
+        modules = set()
+        for t in self._tools:
+            func = self._functions.get(t.name)
+            if func:
+                modules.add(func.__module__.split(".")[-1])
+        return sorted(modules)
+
 
 # Globale registry — gedeeld door orchestrator en agent
 registry = SkillRegistry()
