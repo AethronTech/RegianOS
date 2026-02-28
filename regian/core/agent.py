@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import inspect
 import importlib
 import pkgutil
@@ -107,73 +108,97 @@ registry = SkillRegistry()
 # Lichtgewicht agent die ALTIJD een snel/goedkoop model gebruikt
 # voor betrouwbare tool-routing. Onafhankelijk van de gebruikerskeuze.
 
-ORCHESTRATOR_PROMPT = (
-    "Je bent een tool-uitvoerder. "
-    "Roep DIRECT de juiste tool aan op basis van de vraag. "
-    "Geen uitleg, geen tekst voor de tool-call. Gewoon uitvoeren. "
-    "Na uitvoering: enkel een bondige bevestiging in het Nederlands."
-)
+PLANNER_PROMPT = """Je bent een taakplanner. Analyseer de opdracht en maak een takenlijst.
+
+Gebruik UITSLUITEND tools uit deze lijst:
+{tool_catalog}
+
+Geef je antwoord als een JSON-array (zonder markdown, geen uitleg):
+[
+  {{"tool": "tool_naam", "args": {{"param1": "waarde1"}}}},
+  {{"tool": "tool_naam2", "args": {{}}}}
+]
+
+Regels:
+- Gebruik alleen tools die in de lijst staan
+- Vul args in op basis van de opdracht
+- Zet stappen in de juiste volgorde
+- Als de opdracht geen tools vereist, geef terug: []
+"""
 
 class OrchestratorAgent:
     """
-    Altijd-actieve, lichtgewichte agent voor betrouwbare tool-uitvoering.
-    Gebruikt gemini-flash als GEMINI_API_KEY beschikbaar is, anders mistral.
+    Plan → Execute orchestrator.
+    Fase 1 (Planner): LLM analyseert de opdracht en geeft een JSON takenlijst terug.
+    Fase 2 (Executor): taken worden één voor één deterministisch uitgevoerd.
     """
     def __init__(self):
         self.tools = registry.tools
-        self.tool_map = registry.tool_map
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
-            base_llm = ChatGoogleGenerativeAI(
+            self.base_llm = ChatGoogleGenerativeAI(
                 model="gemini-2.5-flash",
-                temperature=1,  # vereist bij thinking_budget=0
+                temperature=1,
                 google_api_key=gemini_key,
                 model_kwargs={"thinking": {"thinking_budget": 0}},
             )
         else:
-            base_llm = ChatOllama(model="mistral", temperature=0)
-        self.llm = base_llm.bind_tools(self.tools, tool_choice="any")
-        # llm_free: model mag zelf kiezen of het een tool aanroept (voor vervolg-stappen)
-        self.llm_free = base_llm.bind_tools(self.tools)
+            self.base_llm = ChatOllama(model="mistral", temperature=0)
+
+    def _tool_catalog(self) -> str:
+        lines = []
+        for t in sorted(self.tools, key=lambda x: x.name):
+            sig = str(inspect.signature(registry._functions[t.name]))
+            lines.append(f"- {t.name}{sig}: {t.description.splitlines()[0]}")
+        return "\n".join(lines)
+
+    def _plan(self, prompt: str) -> list:
+        catalog = self._tool_catalog()
+        system = PLANNER_PROMPT.format(tool_catalog=catalog)
+        response = self.base_llm.invoke([
+            SystemMessage(content=system),
+            HumanMessage(content=prompt),
+        ])
+        content = response.content
+        if isinstance(content, list):
+            content = " ".join(str(c) for c in content if c)
+        content = content.strip()
+        # Strip markdown code fences als aanwezig
+        content = re.sub(r"^```[a-z]*\n?", "", content)
+        content = re.sub(r"\n?```$", "", content)
+        try:
+            plan = json.loads(content)
+            if isinstance(plan, list):
+                return plan
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return []
 
     def run(self, prompt: str) -> str:
         try:
-            messages = [
-                SystemMessage(content=ORCHESTRATOR_PROMPT),
-                HumanMessage(content=prompt),
-            ]
-            all_results = []
-            # Eerste aanroep: forceer tool-selectie
-            forced_llm = self.llm  # tool_choice="any"
-            for i in range(8):
-                llm_to_use = forced_llm if i == 0 else self.llm_free
-                response = llm_to_use.invoke(messages)
-                messages.append(response)
+            plan = self._plan(prompt)
 
-                if response.tool_calls:
-                    seen = set()
-                    for tc in response.tool_calls:
-                        key = (tc["name"], str(tc["args"]))
-                        if key in seen:
-                            continue
-                        seen.add(key)
-                        result = registry.call(tc["name"], tc["args"])
-                        all_results.append(result)
-                        messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
-                else:
-                    # Model geeft tekst terug → klaar
-                    content = response.content
-                    # Gemini kan content als lijst teruggeven
-                    if isinstance(content, list):
-                        content = " ".join(str(c) for c in content if c)
-                    if content and str(content).strip():
-                        return str(content).strip()
-                    # Geen tekst na tool-uitvoering → geef ruwe resultaten
-                    if all_results:
-                        return "\n\n".join(all_results)
-                    break
+            if not plan:
+                # Geen tools nodig — gewone LLM-vraag
+                response = self.base_llm.invoke([
+                    SystemMessage(content="Je bent Regian, een AI-assistent van AethronTech. Antwoord bondig in het Nederlands."),
+                    HumanMessage(content=prompt),
+                ])
+                content = response.content
+                if isinstance(content, list):
+                    content = " ".join(str(c) for c in content if c)
+                return str(content).strip()
 
-            return "\n\n".join(all_results) if all_results else "⚠️ Het model gaf geen antwoord."
+            # Voer elke taak uit in volgorde
+            results = []
+            for step in plan:
+                tool_name = step.get("tool", "")
+                args = step.get("args", {})
+                result = registry.call(tool_name, args)
+                results.append(f"✅ **{tool_name}**: {result}")
+
+            return "\n\n".join(results)
+
         except Exception as e:
             return f"Orchestrator Fout: {str(e)}"
 
