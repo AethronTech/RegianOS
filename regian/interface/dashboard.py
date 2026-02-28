@@ -1,6 +1,7 @@
 # regian/interface/dashboard.py
 import importlib
 import inspect
+import json
 import pkgutil
 import streamlit as st
 import regian.skills as _skills_pkg
@@ -20,6 +21,137 @@ from regian.settings import (
 
 _GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
 _OLLAMA_MODELS = ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"]
+
+
+def _inject_autocomplete():
+    """Injecteer JS autocomplete dropdown voor slash commands in de chat input."""
+    commands = sorted(t.name for t in registry.tools)
+    cmd_json = json.dumps(commands)
+    st.markdown(f"""
+<script>
+(function(){{
+  var COMMANDS = {cmd_json};
+  var _setup = false;
+
+  function getInput() {{
+    return document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+  }}
+
+  function getOrCreateDropdown() {{
+    var dd = document.getElementById('regian-ac');
+    if (!dd) {{
+      dd = document.createElement('div');
+      dd.id = 'regian-ac';
+      dd.style.cssText = [
+        'position:fixed',
+        'background:#1a1a2e',
+        'border:1px solid #555',
+        'border-radius:8px',
+        'box-shadow:0 6px 20px rgba(0,0,0,.6)',
+        'z-index:99999',
+        'max-height:260px',
+        'overflow-y:auto',
+        'font-family:monospace',
+        'font-size:13px',
+        'display:none',
+        'min-width:280px'
+      ].join(';');
+      document.body.appendChild(dd);
+    }}
+    return dd;
+  }}
+
+  var selectedIdx = -1;
+
+  function setValue(input, val) {{
+    var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(input, val);
+    input.dispatchEvent(new Event('input', {{bubbles:true}}));
+  }}
+
+  function render(matches, dd, input) {{
+    dd.innerHTML = '';
+    selectedIdx = -1;
+    if (!matches.length) {{ dd.style.display = 'none'; return; }}
+    matches.slice(0, 12).forEach(function(cmd, i) {{
+      var item = document.createElement('div');
+      item.textContent = '/' + cmd;
+      item.dataset.cmd = cmd;
+      item.style.cssText = 'padding:8px 14px;cursor:pointer;border-bottom:1px solid #2a2a3a;color:#e0e0e0';
+      item.addEventListener('mouseover', function() {{ selectedIdx = i; highlight(dd); }});
+      item.addEventListener('mousedown', function(e) {{
+        e.preventDefault();
+        setValue(input, '/' + cmd + ' ');
+        dd.style.display = 'none';
+        input.focus();
+      }});
+      dd.appendChild(item);
+    }});
+    var rect = input.getBoundingClientRect();
+    dd.style.left  = rect.left + 'px';
+    dd.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+    dd.style.width = Math.max(rect.width, 280) + 'px';
+    dd.style.display = 'block';
+  }}
+
+  function highlight(dd) {{
+    var items = dd.querySelectorAll('div');
+    items.forEach(function(it, i) {{
+      it.style.background = i === selectedIdx ? '#2d2d5a' : '';
+    }});
+  }}
+
+  function setupInput(input) {{
+    if (input._regianAC) return;
+    input._regianAC = true;
+
+    input.addEventListener('input', function() {{
+      var val = input.value;
+      var dd = getOrCreateDropdown();
+      if (!val.startsWith('/')) {{ dd.style.display = 'none'; return; }}
+      var q = val.slice(1).toLowerCase();
+      var matches = q ? COMMANDS.filter(function(c) {{ return c.toLowerCase().indexOf(q) !== -1; }}) : COMMANDS;
+      render(matches, dd, input);
+    }});
+
+    input.addEventListener('keydown', function(e) {{
+      var dd = document.getElementById('regian-ac');
+      if (!dd || dd.style.display === 'none') return;
+      var items = dd.querySelectorAll('div');
+      if (e.key === 'ArrowDown') {{
+        e.preventDefault();
+        selectedIdx = Math.min(selectedIdx + 1, items.length - 1);
+        highlight(dd);
+      }} else if (e.key === 'ArrowUp') {{
+        e.preventDefault();
+        selectedIdx = Math.max(selectedIdx - 1, 0);
+        highlight(dd);
+      }} else if (e.key === 'Tab') {{
+        e.preventDefault();
+        var idx = selectedIdx >= 0 ? selectedIdx : 0;
+        if (items[idx]) items[idx].dispatchEvent(new MouseEvent('mousedown', {{bubbles:true}}));
+      }} else if (e.key === 'Escape') {{
+        dd.style.display = 'none';
+      }}
+    }});
+
+    input.addEventListener('blur', function() {{
+      var dd = document.getElementById('regian-ac');
+      if (dd) setTimeout(function() {{ dd.style.display = 'none'; }}, 200);
+    }});
+  }}
+
+  // Poll voor Streamlit rerenders
+  setInterval(function() {{
+    var input = getInput();
+    if (input) setupInput(input);
+  }}, 500);
+
+  var input = getInput();
+  if (input) setupInput(input);
+}})();
+</script>
+""", unsafe_allow_html=True)
 
 
 @st.cache_resource
@@ -107,6 +239,7 @@ def start_gui():
 
     # ── CHAT TAB ──────────────────────────────────────────────
     with tab_chat:
+        _inject_autocomplete()
         if "messages" not in st.session_state:
             st.session_state.messages = []
         if "pending_plan" not in st.session_state:
