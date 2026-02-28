@@ -25,41 +25,82 @@ _OLLAMA_MODELS = ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"]
 
 
 def _inject_autocomplete():
-    """Injecteer JS autocomplete dropdown voor slash commands in de chat input."""
+    """Injecteer JS autocomplete dropdown + signature hint voor slash commands."""
     commands = sorted(t.name for t in registry.tools)
+
+    # Bouw {name: {sig: "...", doc: "...", params: [...]}} map
+    sig_map = {}
+    for t in registry.tools:
+        func = registry._functions.get(t.name)
+        if not func:
+            continue
+        sig = inspect.signature(func)
+        params = [
+            {"name": p.name, "hint": (
+                p.name + (f": {p.annotation.__name__}" if p.annotation != inspect.Parameter.empty else "") +
+                (f" = {repr(p.default)}" if p.default != inspect.Parameter.empty else "")
+            )}
+            for p in sig.parameters.values()
+        ]
+        sig_map[t.name] = {
+            "sig": str(sig),
+            "doc": (inspect.getdoc(func) or "").split("\n")[0],
+            "params": params,
+        }
+
     cmd_json = json.dumps(commands)
+    sig_json = json.dumps(sig_map)
+
     _components.html(f"""<script>
 (function(){{
   var doc = window.parent.document;
   var win = window.parent;
   var COMMANDS = {cmd_json};
+  var SIGS = {sig_json};
 
   function getInput() {{
     return doc.querySelector('textarea[data-testid="stChatInputTextArea"]');
   }}
 
+  // ── Dropdown ──────────────────────────────────────────────
   function getOrCreateDropdown() {{
     var dd = doc.getElementById('regian-ac');
     if (!dd) {{
       dd = doc.createElement('div');
       dd.id = 'regian-ac';
       dd.style.cssText = [
-        'position:fixed',
-        'background:#1a1a2e',
-        'border:1px solid #555',
-        'border-radius:8px',
-        'box-shadow:0 6px 20px rgba(0,0,0,.6)',
-        'z-index:99999',
-        'max-height:260px',
-        'overflow-y:auto',
-        'font-family:monospace',
-        'font-size:13px',
-        'display:none',
-        'min-width:280px'
+        'position:fixed','background:#1a1a2e','border:1px solid #555',
+        'border-radius:8px','box-shadow:0 6px 20px rgba(0,0,0,.6)',
+        'z-index:99999','max-height:260px','overflow-y:auto',
+        'font-family:monospace','font-size:13px','display:none','min-width:300px'
       ].join(';');
       doc.body.appendChild(dd);
     }}
     return dd;
+  }}
+
+  // ── Signature hint bar ────────────────────────────────────
+  function getOrCreateHint() {{
+    var h = doc.getElementById('regian-hint');
+    if (!h) {{
+      h = doc.createElement('div');
+      h.id = 'regian-hint';
+      h.style.cssText = [
+        'position:fixed','background:#111','border:1px solid #444',
+        'border-radius:6px','padding:5px 12px','font-family:monospace',
+        'font-size:12px','color:#888','z-index:99998','display:none',
+        'pointer-events:none','white-space:nowrap'
+      ].join(';');
+      doc.body.appendChild(h);
+    }}
+    return h;
+  }}
+
+  function positionBelow(el, rect) {{
+    el.style.left   = rect.left + 'px';
+    el.style.bottom = (win.innerHeight - rect.top + 6) + 'px';
+    el.style.width  = 'auto';
+    el.style.maxWidth = Math.max(rect.width, 300) + 'px';
   }}
 
   var selectedIdx = -1;
@@ -70,15 +111,18 @@ def _inject_autocomplete():
     input.dispatchEvent(new win.Event('input', {{bubbles:true}}));
   }}
 
-  function render(matches, dd, input) {{
+  function renderDropdown(matches, dd, input) {{
     dd.innerHTML = '';
     selectedIdx = -1;
     if (!matches.length) {{ dd.style.display = 'none'; return; }}
     matches.slice(0, 12).forEach(function(cmd, i) {{
+      var info = SIGS[cmd] || {{}};
       var item = doc.createElement('div');
-      item.textContent = '/' + cmd;
-      item.dataset.cmd = cmd;
-      item.style.cssText = 'padding:8px 14px;cursor:pointer;border-bottom:1px solid #2a2a3a;color:#e0e0e0';
+      item.style.cssText = 'padding:7px 14px;cursor:pointer;border-bottom:1px solid #2a2a3a';
+      item.innerHTML =
+        '<span style="color:#e0e0e0">/' + cmd + '</span>' +
+        '<span style="color:#555;font-size:11px">' + (info.sig || '') + '</span>' +
+        (info.doc ? '<div style="color:#777;font-size:11px;margin-top:1px">' + info.doc + '</div>' : '');
       item.addEventListener('mouseover', function() {{ selectedIdx = i; highlight(dd); }});
       item.addEventListener('mousedown', function(e) {{
         e.preventDefault();
@@ -89,9 +133,8 @@ def _inject_autocomplete():
       dd.appendChild(item);
     }});
     var rect = input.getBoundingClientRect();
-    dd.style.left   = rect.left + 'px';
-    dd.style.bottom = (win.innerHeight - rect.top + 6) + 'px';
-    dd.style.width  = Math.max(rect.width, 280) + 'px';
+    positionBelow(dd, rect);
+    dd.style.width = Math.max(rect.width, 300) + 'px';
     dd.style.display = 'block';
   }}
 
@@ -102,18 +145,67 @@ def _inject_autocomplete():
     }});
   }}
 
+  function renderHint(input, cmdName, argsSoFar) {{
+    var h = getOrCreateHint();
+    var info = SIGS[cmdName];
+    if (!info || !info.params.length) {{ h.style.display = 'none'; return; }}
+    // Tel komma's buiten aanhalingstekens om huidige param index te bepalen
+    var commas = 0, inQ = false, qc = '';
+    for (var ci = 0; ci < argsSoFar.length; ci++) {{
+      var ch = argsSoFar[ci];
+      if ((ch === '"' || ch === "'") && !inQ) {{ inQ = true; qc = ch; }}
+      else if (inQ && ch === qc) {{ inQ = false; }}
+      else if (!inQ && ch === ',') {{ commas++; }}
+    }}
+    var html = '(' + info.params.map(function(p, i) {{
+      return i === commas
+        ? '<span style="color:#ccc;text-decoration:underline">' + p.hint + '</span>'
+        : '<span>' + p.hint + '</span>';
+    }}).join('<span style="color:#555">, </span>') + ')';
+    h.innerHTML = '<span style="color:#6699cc">/' + cmdName + '</span>' + html;
+    var rect = input.getBoundingClientRect();
+    positionBelow(h, rect);
+    h.style.display = 'block';
+  }}
+
+  function updateUI(input) {{
+    var val = input.value;
+    var dd  = getOrCreateDropdown();
+    var h   = getOrCreateHint();
+
+    if (!val.startsWith('/')) {{
+      dd.style.display = 'none';
+      h.style.display  = 'none';
+      return;
+    }}
+
+    var rest     = val.slice(1);
+    var spaceIdx = rest.indexOf(' ');
+
+    if (spaceIdx === -1) {{
+      // Nog geen spatie: toon dropdown
+      h.style.display = 'none';
+      var q = rest.toLowerCase();
+      var matches = q ? COMMANDS.filter(function(c) {{ return c.toLowerCase().indexOf(q) !== -1; }}) : COMMANDS;
+      renderDropdown(matches, dd, input);
+    }} else {{
+      // Spatie gevonden: command is ingetypt, toon signature hint
+      dd.style.display = 'none';
+      var cmdName  = rest.slice(0, spaceIdx);
+      var argsSoFar = rest.slice(spaceIdx + 1);
+      if (SIGS[cmdName]) {{
+        renderHint(input, cmdName, argsSoFar);
+      }} else {{
+        h.style.display = 'none';
+      }}
+    }}
+  }}
+
   function setupInput(input) {{
     if (input._regianAC) return;
     input._regianAC = true;
 
-    input.addEventListener('input', function() {{
-      var val = input.value;
-      var dd = getOrCreateDropdown();
-      if (!val.startsWith('/')) {{ dd.style.display = 'none'; return; }}
-      var q = val.slice(1).toLowerCase();
-      var matches = q ? COMMANDS.filter(function(c) {{ return c.toLowerCase().indexOf(q) !== -1; }}) : COMMANDS;
-      render(matches, dd, input);
-    }});
+    input.addEventListener('input', function() {{ updateUI(input); }});
 
     input.addEventListener('keydown', function(e) {{
       var dd = doc.getElementById('regian-ac');
@@ -137,8 +229,12 @@ def _inject_autocomplete():
     }});
 
     input.addEventListener('blur', function() {{
-      var dd = doc.getElementById('regian-ac');
-      if (dd) setTimeout(function() {{ dd.style.display = 'none'; }}, 200);
+      setTimeout(function() {{
+        var dd = doc.getElementById('regian-ac');
+        var h  = doc.getElementById('regian-hint');
+        if (dd) dd.style.display = 'none';
+        if (h)  h.style.display  = 'none';
+      }}, 200);
     }});
   }}
 
