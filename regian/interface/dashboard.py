@@ -7,6 +7,7 @@ import streamlit as st
 import streamlit.components.v1 as _components
 import regian.skills as _skills_pkg
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
+from regian.skills.terminal import is_destructive_shell_command
 from regian.core.scheduler import (
     get_scheduler, get_all_jobs, get_next_run,
     add_scheduled_job, remove_scheduled_job, toggle_scheduled_job,
@@ -266,6 +267,17 @@ def _start_scheduler():
     return get_scheduler()
 
 
+def _step_needs_confirm(step: dict, confirm_set: set) -> bool:
+    """Geeft True als de stap HITL-bevestiging vereist.
+    Voor run_shell: enkel bij destructieve commando-patronen.
+    Voor andere tools: als de tool in confirm_set staat.
+    """
+    tool = step.get("tool", "")
+    if tool == "run_shell":
+        return is_destructive_shell_command(step.get("args", {}).get("command", ""))
+    return tool in confirm_set
+
+
 def _handle_slash_command(prompt: str) -> tuple:
     """
     Parst '/function_name [args]' en roept de juiste skill aan via de registry.
@@ -354,7 +366,7 @@ def start_gui():
             for i, step in enumerate(plan, 1):
                 tool = step.get("tool", "")
                 args = step.get("args", {})
-                icon = "🔴" if tool in confirm_set else "🟢"
+                icon = "🔴" if _step_needs_confirm(step, confirm_set) else "🟢"
                 st.markdown(f"{icon} **Stap {i}:** `{tool}` — {args}")
 
             col1, col2 = st.columns(2)
@@ -386,16 +398,26 @@ def start_gui():
                     stripped = prompt[1:].strip()
                     if not stripped:
                         response = registry.list_commands()
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        st.rerun()
                     else:
-                        response, badge = _handle_slash_command(prompt)
-                    st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
-                    st.rerun()
+                        # HITL voor destructieve /run_shell commando's
+                        _parts = stripped.split(" ", 1)
+                        _slash_name = _parts[0].strip()
+                        _slash_arg = _parts[1].strip() if len(_parts) > 1 else ""
+                        if _slash_name == "run_shell" and is_destructive_shell_command(_slash_arg):
+                            st.session_state.pending_plan = [{"tool": "run_shell", "args": {"command": _slash_arg}}]
+                            st.rerun()
+                        else:
+                            response, badge = _handle_slash_command(prompt)
+                            st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
+                            st.rerun()
                 else:
                     with st.spinner("Planner is aan het werk..."):
                         plan = get_orchestrator().plan(prompt)
 
                     # Controleer of plan gevaarlijke stappen bevat
-                    dangerous = [s for s in plan if s.get("tool") in confirm_set]
+                    dangerous = [s for s in plan if _step_needs_confirm(s, confirm_set)]
                     if dangerous:
                         st.session_state.pending_plan = plan
                         st.rerun()
