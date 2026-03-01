@@ -1,6 +1,6 @@
-# regian/skills/dev.py
+# regian/skills/terminal.py
 """
-Dev-skills: shell runner en Python executor.
+Terminal-skills: shell runner en Python executor.
 """
 import subprocess
 from pathlib import Path
