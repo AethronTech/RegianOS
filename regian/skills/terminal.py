@@ -82,10 +82,13 @@ def run_shell(command: str, cwd: str = "") -> str:
 
 def run_python(code: str, cwd: str = "") -> str:
     """
-    Voert een stuk Python-code uit en geeft stdout terug. Handig voor snelle tests.
+    Voert een stuk Python-code uit en geeft stdout terug.
+    Gebruik dit om Python-bestanden of -snippets uit te voeren.
+    Geeft de voorkeur aan run_python boven run_shell voor Python-code
+    (bijv. NIET 'run_shell python3 script.py', maar run_python(open('script.py').read(), cwd=...)).
     cwd: werkmap die als sys.path[0] en os.getcwd() wordt ingesteld.
          Leeg = REGIAN_ROOT_DIR. Relatief pad t.o.v. REGIAN_ROOT_DIR.
-         Voorbeeld: run_python('import app', cwd='project_a')
+         Voorbeeld voor een bestand in TestDev/: run_python(open('test_script.py').read(), cwd='TestDev')
     """
     try:
         work_dir = _resolve_cwd(cwd)
