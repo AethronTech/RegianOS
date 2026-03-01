@@ -18,6 +18,7 @@ from regian.settings import (
     get_llm_provider, set_llm_provider,
     get_llm_model, set_llm_model,
     get_confirm_required, set_confirm_required,
+    get_dangerous_patterns, set_dangerous_patterns,
 )
 
 
@@ -691,6 +692,34 @@ def start_gui():
         if st.button("💾 HITL opslaan", key="save_confirm"):
             set_confirm_required(set(new_confirm))
             st.success(f"✅ Opgeslagen: {', '.join(sorted(new_confirm)) or '(geen)'}")
+
+        st.markdown("---")
+
+        # 4. Destructieve shell-patronen
+        st.markdown("### ⚠️ Destructieve shell-patronen")
+        st.caption(
+            "Regex-patronen die HITL triggeren bij `run_shell`. Één patroon per regel. "
+            "Leeg laten herstelt de standaard-patronen bij de volgende opstart."
+        )
+        current_patterns = get_dangerous_patterns()
+        new_patterns_text = st.text_area(
+            "Patronen (één per regel)",
+            value="\n".join(current_patterns),
+            height=230,
+            key="settings_patterns",
+        )
+        col_pat1, col_pat2 = st.columns([1, 1])
+        with col_pat1:
+            if st.button("💾 Patronen opslaan", key="save_patterns"):
+                new_patterns = [p.strip() for p in new_patterns_text.splitlines() if p.strip()]
+                set_dangerous_patterns(new_patterns)
+                st.success(f"✅ {len(new_patterns)} patronen opgeslagen.")
+        with col_pat2:
+            if st.button("↩️ Herstel standaard", key="reset_patterns"):
+                from regian.settings import _DEFAULT_DANGEROUS_PATTERNS
+                set_dangerous_patterns(list(_DEFAULT_DANGEROUS_PATTERNS))
+                st.success("✅ Standaard-patronen hersteld.")
+                st.rerun()
 
 
 if __name__ == "__main__":

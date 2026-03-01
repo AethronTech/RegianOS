@@ -47,3 +47,47 @@ def set_confirm_required(tools: set[str]):
     value = ",".join(sorted(tools))
     set_key(str(ENV_FILE), "CONFIRM_REQUIRED", value)
     os.environ["CONFIRM_REQUIRED"] = value
+
+
+# ── DANGEROUS_PATTERNS Settings ───────────────────────────────
+
+import json as _json
+
+_DEFAULT_DANGEROUS_PATTERNS: list[str] = [
+    r"\brm\b.*-[a-z]*[rf]",
+    r"\bsudo\b",
+    r"\bmkfs\b",
+    r"\bdd\b.+of=/dev/",
+    r"\bformat\b",
+    r"\bfdisk\b",
+    r"\bparted\b",
+    r"\bshred\b",
+    r"\bwipefs\b",
+    r">\s*/dev/sd",
+    r"\bpoweroff\b",
+    r"\bshutdown\b",
+    r"\breboot\b",
+    r"\btruncate\b",
+    r"\bdrop\s+database\b",
+    r"\bchmod\s+[0-7]*7[0-7]*\b",
+]
+
+def get_dangerous_patterns() -> list[str]:
+    """Laad destructieve shell-patronen uit .env (JSON). Valt terug op defaults."""
+    load_dotenv(ENV_FILE, override=True)
+    raw = os.getenv("DANGEROUS_PATTERNS", "")
+    if not raw:
+        return list(_DEFAULT_DANGEROUS_PATTERNS)
+    try:
+        result = _json.loads(raw)
+        if isinstance(result, list):
+            return result
+    except (_json.JSONDecodeError, ValueError):
+        pass
+    return list(_DEFAULT_DANGEROUS_PATTERNS)
+
+def set_dangerous_patterns(patterns: list[str]):
+    """Sla destructieve shell-patronen op als JSON in .env."""
+    value = _json.dumps(patterns)
+    set_key(str(ENV_FILE), "DANGEROUS_PATTERNS", value)
+    os.environ["DANGEROUS_PATTERNS"] = value
