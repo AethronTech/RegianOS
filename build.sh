@@ -40,7 +40,32 @@ else
     echo "⚠️  Ollama niet gevonden. Installeer via https://ollama.com als je lokale modellen wil gebruiken."
 fi
 
+# 7. Tests uitvoeren
+if [[ "$*" != *"--skip-tests"* ]]; then
+    echo ""
+    echo "🧪 Tests uitvoeren..."
+    python3 -m pytest tests/ -v --tb=short \
+        --cov=regian \
+        --cov-report=term-missing \
+        --cov-report=html:htmlcov \
+        --cov-fail-under=60
+    TEST_EXIT=$?
+    if [ $TEST_EXIT -ne 0 ]; then
+        echo ""
+        echo "❌ Tests gefaald (exit $TEST_EXIT). Start toch verder met --skip-tests om te overslaan."
+        exit $TEST_EXIT
+    fi
+    echo "✅ Alle tests geslaagd"
+else
+    echo "⚠️  Tests overgeslagen (--skip-tests)"
+fi
+
 echo ""
 echo "=== Build succesvol ==="
 echo ""
-python3 main.py "$@"
+# Filter --skip-tests uit de argumenten voordat main.py wordt gestart
+FORWARD_ARGS=()
+for arg in "$@"; do
+    [[ "$arg" == "--skip-tests" ]] || FORWARD_ARGS+=("$arg")
+done
+python3 main.py "${FORWARD_ARGS[@]}"

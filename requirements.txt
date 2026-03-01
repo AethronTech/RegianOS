@@ -7,3 +7,5 @@ python-dotenv
 prompt_toolkit
 typer
 apscheduler
+pytest
+pytest-cov

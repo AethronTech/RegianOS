@@ -1,0 +1,22 @@
+[run]
+source = regian
+omit =
+    # Streamlit dashboard — vereist Streamlit runtime, geen unit-tests
+    regian/interface/dashboard.py
+    # CLI — vereist terminal-interactie
+    regian/interface/cli.py
+    # GitHub-skills — vereist live GitHub API token
+    regian/skills/github.py
+    # Skill-generator — vereist LLM API
+    regian/skills/skills.py
+
+[report]
+exclude_lines =
+    # Standaard pragma
+    pragma: no cover
+    # Debug/repr
+    def __repr__
+    # Abstracte methodes
+    raise NotImplementedError
+    # Niet bereikbare code
+    if __name__ == .__main__.:

@@ -9,3 +9,7 @@ env/
 dist/
 build/
 .DS_Store
+# Test coverage
+htmlcov/
+.coverage
+.coverage.*

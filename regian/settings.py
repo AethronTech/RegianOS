@@ -69,7 +69,7 @@ _DEFAULT_DANGEROUS_PATTERNS: list[str] = [
     r"\breboot\b",
     r"\btruncate\b",
     r"\bdrop\s+database\b",
-    r"\bchmod\s+[0-7]*7[0-7]*\b",
+    r"\bchmod\b.+(777|o\+[wx]|a\+[wx]|ugo\+[wx])",  # wereld-schrijfbaar (chmod 777, o+w, ...)
 ]
 
 def get_dangerous_patterns() -> list[str]:
