@@ -123,6 +123,41 @@ class TestRunShell:
         assert isinstance(result, str)
         assert len(result) > 0  # altijd een melding
 
+    def test_cwd_default_is_root(self, tmp_root):
+        from regian.skills.terminal import run_shell
+        # Schrijf bestand in root, voer run_shell zonder cwd uit → vindt het bestand
+        (tmp_root / "hello.txt").write_text("root", encoding="utf-8")
+        result = run_shell("cat hello.txt")
+        assert "root" in result
+
+    def test_cwd_relative_subdir(self, tmp_root):
+        from regian.skills.terminal import run_shell
+        sub = tmp_root / "subproject"
+        sub.mkdir()
+        (sub / "info.txt").write_text("subproject", encoding="utf-8")
+        result = run_shell("cat info.txt", cwd="subproject")
+        assert "subproject" in result
+
+    def test_cwd_creates_missing_dir(self, tmp_root):
+        from regian.skills.terminal import run_shell
+        result = run_shell("echo nieuw", cwd="nieuwe_map/submap")
+        assert "nieuw" in result
+        assert (tmp_root / "nieuwe_map" / "submap").is_dir()
+
+    def test_cwd_absolute_path(self, tmp_path, tmp_root):
+        from regian.skills.terminal import run_shell
+        # Absoluut pad binnen root → mag
+        sub = tmp_root / "absoluut"
+        sub.mkdir()
+        result = run_shell("echo ok", cwd=str(sub))
+        assert "ok" in result
+
+    def test_cwd_path_traversal_blocked(self, tmp_root):
+        from regian.skills.terminal import run_shell
+        # ../../../ buiten root → geblokkeerd
+        result = run_shell("echo hack", cwd="../../etc")
+        assert "❌" in result or "Verboden" in result
+
 
 # ── run_python ─────────────────────────────────────────────────────────────────
 
@@ -168,3 +203,35 @@ class TestRunPython:
         from regian.skills.terminal import run_python
         result = run_python("import os; print(type(os).__name__)")
         assert "module" in result
+
+    def test_cwd_sets_working_directory(self, tmp_root):
+        from regian.skills.terminal import run_python
+        sub = tmp_root / "myproject"
+        sub.mkdir()
+        (sub / "data.txt").write_text("project data", encoding="utf-8")
+        # os.getcwd() in de code moet de submap zijn
+        result = run_python(
+            "import os; f=open('data.txt'); print(f.read().strip())",
+            cwd="myproject",
+        )
+        assert "project data" in result
+
+    def test_cwd_adds_to_syspath(self, tmp_root):
+        from regian.skills.terminal import run_python
+        sub = tmp_root / "pkg"
+        sub.mkdir()
+        (sub / "mymod.py").write_text("VALUE = 42", encoding="utf-8")
+        result = run_python("import mymod; print(mymod.VALUE)", cwd="pkg")
+        assert "42" in result
+
+    def test_cwd_restores_after_error(self, tmp_root):
+        import os
+        from regian.skills.terminal import run_python
+        original_cwd = os.getcwd()
+        run_python("raise RuntimeError('boom')", cwd="submap")
+        assert os.getcwd() == original_cwd  # hersteld ondanks fout
+
+    def test_cwd_path_traversal_blocked(self, tmp_root):
+        from regian.skills.terminal import run_python
+        result = run_python("print('hack')", cwd="../../etc")
+        assert "❌" in result or "Verboden" in result
