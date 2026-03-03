@@ -206,6 +206,69 @@ def get_project_info(name: str = "") -> str:
     return "\n".join(lines)
 
 
+def rename_project(old_name: str, new_name: str) -> str:
+    """
+    Hernoemt een project: de mapnaam, het manifest en het actieve project worden bijgewerkt.
+    Workflow run-states met een verouderd projectpad worden automatisch gecorrigeerd.
+    old_name: huidige projectnaam.
+    new_name: nieuwe projectnaam (mag nog niet bestaan).
+    """
+    safe_old = old_name.strip().replace(" ", "_")
+    safe_new = new_name.strip().replace(" ", "_")
+
+    if not safe_old or not safe_new:
+        return "❌ Beide namen mogen niet leeg zijn."
+    if safe_old == safe_new:
+        return "ℹ️ Oude en nieuwe naam zijn gelijk — niets gewijzigd."
+
+    old_path = _project_dir(safe_old)
+    new_path = _project_dir(safe_new)
+
+    if not (old_path / _MANIFEST).exists():
+        return f"❌ Project '{safe_old}' niet gevonden."
+    if new_path.exists():
+        return f"❌ Er bestaat al een map '{safe_new}' in de werkmap."
+
+    # 1. Map hernoemen
+    old_path.rename(new_path)
+
+    # 2. Manifest bijwerken
+    manifest = json.loads((new_path / _MANIFEST).read_text(encoding="utf-8"))
+    manifest["name"] = safe_new
+    manifest["path"] = str(new_path)
+    (new_path / _MANIFEST).write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    # 3. Workflow run-states bijwerken (project_path-veld)
+    state_dir = new_path / ".regian_workflow_state"
+    if state_dir.exists():
+        for state_file in state_dir.glob("*.json"):
+            try:
+                data = json.loads(state_file.read_text(encoding="utf-8"))
+                if str(old_path) in data.get("project_path", ""):
+                    data["project_path"] = data["project_path"].replace(
+                        str(old_path), str(new_path))
+                    state_file.write_text(
+                        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+                    )
+            except Exception:
+                pass  # corrupte state-bestanden overslaan
+
+    # 4. ACTIVE_PROJECT bijwerken als dit project actief was
+    from regian.settings import get_active_project, set_active_project
+    if get_active_project() == safe_old:
+        set_active_project(safe_new)
+        active_msg = " Het actieve project is bijgewerkt."
+    else:
+        active_msg = ""
+
+    return (
+        f"✅ Project hernoemd: `{safe_old}` → `{safe_new}`\n"
+        f"   Nieuw pad: `{new_path}`{active_msg}"
+    )
+
+
 def list_projects() -> str:
     """
     Geeft een overzicht van alle Regian-projecten in de werkmap.

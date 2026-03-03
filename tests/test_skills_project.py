@@ -269,3 +269,84 @@ class TestListProjects:
         create_project("icoon-proj", "docs")
         result = list_projects()
         assert "📄" in result  # icoon voor docs-type
+
+
+# ── rename_project ─────────────────────────────────────────────────────────────
+
+class TestRenameProject:
+    def test_basishernoem(self, ws):
+        from regian.skills.project import create_project, rename_project
+        create_project("oud", "generic")
+        result = rename_project("oud", "nieuw")
+        assert "✅" in result
+        assert (ws / "nieuw").is_dir()
+        assert not (ws / "oud").exists()
+
+    def test_manifest_bijgewerkt(self, ws):
+        from regian.skills.project import create_project, rename_project
+        create_project("proj_a", "software")
+        rename_project("proj_a", "proj_b")
+        manifest = _read_manifest(ws, "proj_b")
+        assert manifest["name"] == "proj_b"
+        assert "proj_b" in manifest["path"]
+        assert "proj_a" not in manifest["path"]
+
+    def test_actief_project_bijgewerkt(self, ws, monkeypatch):
+        import regian.settings as s
+        from regian.skills.project import create_project, rename_project
+        create_project("actief_oud", "generic")
+        monkeypatch.setenv("ACTIVE_PROJECT", "actief_oud")
+        monkeypatch.setattr(s, "get_active_project", lambda: "actief_oud")
+        captured = {}
+        monkeypatch.setattr(s, "set_active_project", lambda n: captured.update({"name": n}))
+        rename_project("actief_oud", "actief_nieuw")
+        assert captured.get("name") == "actief_nieuw"
+
+    def test_niet_actief_project_ongewijzigd(self, ws, monkeypatch):
+        import regian.settings as s
+        from regian.skills.project import create_project, rename_project
+        create_project("inactief", "generic")
+        monkeypatch.setenv("ACTIVE_PROJECT", "ander_project")
+        monkeypatch.setattr(s, "get_active_project", lambda: "ander_project")
+        captured = {}
+        monkeypatch.setattr(s, "set_active_project", lambda n: captured.update({"name": n}))
+        rename_project("inactief", "hernoemd")
+        assert "name" not in captured  # set_active_project niet aangeroepen
+
+    def test_workflow_state_bijgewerkt(self, ws):
+        import json
+        from regian.skills.project import create_project, rename_project
+        create_project("wf_oud", "generic")
+        state_dir = ws / "wf_oud" / ".regian_workflow_state"
+        state_dir.mkdir()
+        state = {"run_id": "abc", "project_path": str(ws / "wf_oud"), "status": "done"}
+        (state_dir / "abc.json").write_text(json.dumps(state), encoding="utf-8")
+        rename_project("wf_oud", "wf_nieuw")
+        updated = json.loads((ws / "wf_nieuw" / ".regian_workflow_state" / "abc.json")
+                             .read_text(encoding="utf-8"))
+        assert "wf_nieuw" in updated["project_path"]
+        assert "wf_oud" not in updated["project_path"]
+
+    def test_fout_als_oud_niet_bestaat(self, ws):
+        from regian.skills.project import rename_project
+        result = rename_project("bestaat_niet", "nieuw")
+        assert "❌" in result
+
+    def test_fout_als_nieuw_al_bestaat(self, ws):
+        from regian.skills.project import create_project, rename_project
+        create_project("proj1", "generic")
+        create_project("proj2", "generic")
+        result = rename_project("proj1", "proj2")
+        assert "❌" in result
+        assert (ws / "proj1").is_dir()  # origineel onaangetast
+
+    def test_zelfde_naam_geeft_info(self, ws):
+        from regian.skills.project import create_project, rename_project
+        create_project("zelfde", "generic")
+        result = rename_project("zelfde", "zelfde")
+        assert "ℹ️" in result
+
+    def test_lege_naam_geeft_fout(self, ws):
+        from regian.skills.project import rename_project
+        result = rename_project("", "nieuw")
+        assert "❌" in result

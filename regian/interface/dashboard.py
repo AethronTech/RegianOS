@@ -1582,6 +1582,46 @@ def start_gui():
                 st.success(f"✅ Bestandsnamen gereset naar standaard.")
                 st.rerun()
 
+        st.markdown("---")
+
+        # 11. Projectbeheer — hernoemen
+        st.markdown("### 📁 Projectbeheer")
+        _pm_all_projects = []
+        _pm_root = Path(get_root_dir())
+        if _pm_root.exists():
+            for _pm_entry in sorted(_pm_root.iterdir()):
+                if _pm_entry.is_dir() and (_pm_entry / ".regian_project.json").exists():
+                    _pm_all_projects.append(_pm_entry.name)
+
+        if not _pm_all_projects:
+            st.caption("Geen projecten gevonden in de werkmap.")
+        else:
+            st.caption("Hernoem een project. De mapnaam, het manifest en eventuele workflow-state worden bijgewerkt.")
+            _pm_col1, _pm_col2 = st.columns(2)
+            with _pm_col1:
+                _pm_old = st.selectbox(
+                    "Project om te hernoemen",
+                    _pm_all_projects,
+                    key="pm_rename_old",
+                )
+            with _pm_col2:
+                _pm_new = st.text_input(
+                    "Nieuwe naam",
+                    placeholder="nieuwe_naam",
+                    key="pm_rename_new",
+                )
+            if st.button("✏️ Hernoem project", key="pm_rename_btn"):
+                if not _pm_new.strip():
+                    st.warning("Geef een nieuwe naam op.")
+                else:
+                    from regian.skills.project import rename_project as _rp
+                    _rp_result = _rp(_pm_old, _pm_new.strip())
+                    if "✅" in _rp_result:
+                        st.success(_rp_result)
+                        st.rerun()
+                    else:
+                        st.error(_rp_result)
+
     # ── WORKFLOWS TAB ─────────────────────────────────────────
     with tab_workflows:
         from regian.core.workflow import (

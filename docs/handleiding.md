@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.1.3 · **Datum:** 3 maart 2026
+**Versie:** 1.1.6 · **Datum:** 3 maart 2026
 
 ---
 
@@ -588,4 +588,4 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.1.3 · 3 maart 2026*
+*Regian OS — Milestone 1.1.6 · 3 maart 2026*
