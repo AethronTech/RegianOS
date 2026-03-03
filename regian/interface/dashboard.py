@@ -1704,7 +1704,7 @@ def start_gui():
                                     st.rerun()
 
         # ── Sectie 3: Templates ────────────────────────────────
-        else:
+        elif wf_sub == "📚 Templates":
             st.markdown("### 📚 Workflow-templates")
             _wf_tmpl_list = _wf_list_templates(_wf_pp)
             if not _wf_tmpl_list:
