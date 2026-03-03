@@ -44,56 +44,64 @@ _OLLAMA_MODELS = get_ollama_models()
 
 
 def _inject_global_styles():
-    """Vervang 'Ask ChatGPT' door 'Ask Gemini' in Streamlit error display."""
+    """Vervang 'Ask ChatGPT' door 'Ask Gemini' + injecteer chat-knop CSS in parent-document."""
     js = """
-<style>
-/* ── Actieknoppen in chatberichten: compact rechts ── */
-[data-testid="stChatMessage"] [data-testid="stHorizontalBlock"]:last-child {
-  display: flex !important;
-  justify-content: flex-end !important;
-  gap: 2px !important;
-  margin-top: -6px !important;
-  margin-bottom: 0 !important;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-[data-testid="stChatMessage"]:hover
-  [data-testid="stHorizontalBlock"]:last-child {
-  opacity: 1;
-}
-[data-testid="stChatMessage"]
-  [data-testid="stHorizontalBlock"]:last-child
-  [data-testid="stColumn"] {
-  flex: 0 0 auto !important;
-  min-width: 0 !important;
-  width: auto !important;
-  padding: 0 !important;
-}
-[data-testid="stChatMessage"]
-  [data-testid="stHorizontalBlock"]:last-child
-  button {
-  padding: 1px 5px !important;
-  min-height: 0 !important;
-  height: 22px !important;
-  line-height: 1 !important;
-  font-size: 0.78rem !important;
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  box-shadow: none !important;
-  color: #888 !important;
-  border-radius: 4px !important;
-}
-[data-testid="stChatMessage"]
-  [data-testid="stHorizontalBlock"]:last-child
-  button:hover {
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.15) !important;
-  color: #ddd !important;
-}
-</style>
 <script>
 (function() {
   var doc = window.parent.document;
+
+  /* ── Injecteer CSS in parent-document ── */
+  if (!doc.getElementById('regian-chat-btn-styles')) {
+    var s = doc.createElement('style');
+    s.id = 'regian-chat-btn-styles';
+    s.textContent = `
+      [data-testid="stChatMessage"] [data-testid="stHorizontalBlock"]:last-child {
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 2px !important;
+        margin-top: -4px !important;
+        margin-bottom: 0 !important;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+      }
+      [data-testid="stChatMessage"]:hover
+        [data-testid="stHorizontalBlock"]:last-child {
+        opacity: 1;
+      }
+      [data-testid="stChatMessage"]
+        [data-testid="stHorizontalBlock"]:last-child
+        [data-testid="stColumn"] {
+        flex: 0 0 auto !important;
+        min-width: 0 !important;
+        width: auto !important;
+        padding: 0 2px !important;
+      }
+      [data-testid="stChatMessage"]
+        [data-testid="stHorizontalBlock"]:last-child
+        button {
+        padding: 1px 6px !important;
+        min-height: 0 !important;
+        height: 22px !important;
+        line-height: 1 !important;
+        font-size: 0.78rem !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        box-shadow: none !important;
+        color: #666 !important;
+        border-radius: 4px !important;
+      }
+      [data-testid="stChatMessage"]
+        [data-testid="stHorizontalBlock"]:last-child
+        button:hover {
+        background: rgba(255,255,255,0.08) !important;
+        border-color: rgba(255,255,255,0.18) !important;
+        color: #ddd !important;
+      }
+    `;
+    doc.head.appendChild(s);
+  }
+
+  /* ── Patch 'Ask ChatGPT' → 'Ask Gemini' ── */
   function patchChatGPT(root) {
     root.querySelectorAll('a').forEach(function(el) {
       if (el.innerText && el.innerText.includes('ChatGPT')) {
