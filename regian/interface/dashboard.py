@@ -2035,7 +2035,11 @@ def start_gui():
 
         # ── Sectie 2: Actieve runs ─────────────────────────────
         elif wf_sub == "📋 Actieve runs":
-            st.markdown("### 📋 Actieve runs")
+            _wf_proj_label = Path(_wf_pp).name if _wf_pp else ""
+            st.markdown(
+                f"### 📋 Actieve runs"
+                + (f" — 📁 `{_wf_proj_label}`" if _wf_proj_label else "")
+            )
 
             # Multi-rerun fase-voor-fase na Goedkeuren
             if "_wf_adv_id" in st.session_state:
@@ -2257,10 +2261,14 @@ def start_gui():
 
         # ── Sectie 4: Project uitvoeren ────────────────────────
         elif wf_sub == "▶️ Project uitvoeren":
-            st.markdown("### ▶️ Project uitvoeren")
             import subprocess as _wfsp
 
             _pp_run = _wf_pp
+            _wf_run_label = Path(_pp_run).name if _pp_run else ""
+            st.markdown(
+                "### ▶️ Project uitvoeren"
+                + (f" — 📁 `{_wf_run_label}`" if _wf_run_label else "")
+            )
             if not _pp_run:
                 st.info("Geen actief project. Activeer een project via de zijbalk.")
             else:
