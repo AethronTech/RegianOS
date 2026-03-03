@@ -224,6 +224,8 @@ BELANGRIJK — wanneer geef je [] terug (geen tools):
 - Vragen die beantwoord kunnen worden vanuit de context (uploads, kennisbank) die al in de prompt aanwezig zijn: beantwoord die direct zonder tools
 - Uitleg-, analyse- of samenvattingsvragen over gegevens die al in de context staan: altijd []
 - Gebruik NOOIT write_file, activate_project of andere tools enkel om een vraag te beantwoorden; schrijf antwoorden in de chat, niet naar bestanden
+- "Hoe doe ik X?", "Wat is X?", "Leg uit hoe X werkt", "Welke commando's..." — dit zijn INFORMATIEVRAGEN, geen opdrachten. Geef [] terug en beantwoord ze in tekst. Voer de beschreven actie NIET uit.
+- Als de gebruiker een placeholder-naam gebruikt (zoals "naam_van_de_workflow", "mijn_project", "bestandsnaam") is de zin een voorbeeld of een vraag — geen echte opdracht. Geef [] terug.
 
 WANNEER je run_python gebruikt voor CSV-analyse:
 - Lees de kolomnamen ALTIJD eerst uit de eerste rij van het bestand — doe GEEN aannames
