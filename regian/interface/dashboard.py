@@ -2060,7 +2060,9 @@ def start_gui():
                                         with st.spinner("🧠 Fase opnieuw uitvoeren met feedback..."):
                                             try:
                                                 _wf_revise(_wfr.run_id, _wf_feedback.strip(), _wf_pp)
-                                                st.session_state[f"wf_feedback_{_wfr.run_id}"] = ""
+                                                _wf_fb_key = f"wf_feedback_{_wfr.run_id}"
+                                                if _wf_fb_key in st.session_state:
+                                                    del st.session_state[_wf_fb_key]
                                                 st.toast("🔄 Uitvoer bijgewerkt — bekijk het resultaat hierboven.")
                                             except Exception as _wfe:
                                                 st.error(f"❌ {_wfe}")
