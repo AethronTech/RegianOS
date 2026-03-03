@@ -140,6 +140,94 @@ def _inject_global_styles():
     }
   }
   start();
+
+  /* ── Scroll-to-top knop ── */
+  (function() {
+    var BTN_ID = 'regian-scroll-top-btn';
+    if (doc.getElementById(BTN_ID)) return;
+
+    /* Stijl */
+    var s2 = doc.createElement('style');
+    s2.textContent = `
+      #regian-scroll-top-btn {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        z-index: 99999;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: #1e1e2e;
+        color: #a0a8ff;
+        font-size: 1.2rem;
+        line-height: 38px;
+        text-align: center;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+        pointer-events: none;
+        user-select: none;
+      }
+      #regian-scroll-top-btn.visible {
+        opacity: 0.85;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      #regian-scroll-top-btn:hover {
+        opacity: 1;
+        background: #2a2a4a;
+        color: #fff;
+      }
+    `;
+    doc.head.appendChild(s2);
+
+    /* Knop-element */
+    var btn = doc.createElement('div');
+    btn.id = BTN_ID;
+    btn.title = 'Terug naar boven';
+    btn.innerHTML = '&#8679;';  /* ⇧ */
+
+    /* Scrollbaar container vinden (Streamlit main area) */
+    function getScrollEl() {
+      return doc.querySelector('section[data-testid="stMain"]')
+          || doc.querySelector('div.main')
+          || doc.scrollingElement
+          || doc.documentElement;
+    }
+
+    btn.addEventListener('click', function() {
+      var el = getScrollEl();
+      el.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    /* Toon/verberg op basis van scrollpositie */
+    function onScroll() {
+      var el = getScrollEl();
+      var top = (el === doc.documentElement || el === doc.scrollingElement)
+                ? (doc.documentElement.scrollTop || doc.body.scrollTop)
+                : el.scrollTop;
+      if (top > 300) {
+        btn.classList.add('visible');
+      } else {
+        btn.classList.remove('visible');
+      }
+    }
+
+    function attachScroll() {
+      var el = getScrollEl();
+      if (el) {
+        el.addEventListener('scroll', onScroll, { passive: true });
+        doc.body.appendChild(btn);
+      } else {
+        setTimeout(attachScroll, 300);
+      }
+    }
+    attachScroll();
+  }());
+
 }());
 </script>
 """
