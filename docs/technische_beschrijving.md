@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.1.6 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.6 — Intern document
+**Versie:** 1.1.15 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.15 — Intern document
 
 ---
 
@@ -457,7 +457,7 @@ elif provider == "nieuwe_provider":
 
 ---
 
-## 13. Workflow-engine (Milestone 1.1.6)
+## 13. Workflow-engine (Milestone 1.1.15)
 
 ### 13.1 Architectuur
 
@@ -541,4 +541,4 @@ Import loopt via `xml.etree.ElementTree`; sequence flows bepalen de fase-volgord
 
 ---
 
-*Regian OS — Milestone 1.1.6 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.1.15 · Intern document · 3 maart 2026*

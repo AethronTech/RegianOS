@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.1.6 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.6 — Intern document
+**Versie:** 1.1.15 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.15 — Intern document
 
 ---
 
@@ -274,7 +274,7 @@ Geen configuratie, geen registratie — het systeem ontdekt de skill automatisch
 
 ---
 
-## 8. Workflow-systeem (nieuw in 1.1.6)
+## 8. Workflow-systeem (nieuw in 1.1.15)
 
 ### 8.1 Concept
 
@@ -322,4 +322,4 @@ Workflows kunnen worden geïmporteerd vanuit en geëxporteerd naar BPMN 2.0 XML-
 
 ---
 
-*Regian OS — Milestone 1.1.6 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.1.15 · Intern document · 3 maart 2026*
