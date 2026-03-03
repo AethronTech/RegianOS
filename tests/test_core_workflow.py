@@ -111,7 +111,7 @@ class TestLoadWorkflow:
         from regian.core.workflow import load_workflow
         tpl = load_workflow("van_idee_tot_mvp")
         assert tpl["id"] == "van_idee_tot_mvp"
-        assert len(tpl["phases"]) == 4
+        assert len(tpl["phases"]) == 5  # architect, breakdown, implement, test_validatie, review
 
     def test_niet_gevonden_gooit_error(self):
         from regian.core.workflow import load_workflow
