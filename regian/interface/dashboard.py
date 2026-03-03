@@ -2297,7 +2297,7 @@ def start_gui():
                         elif "start" in _scripts:
                             _run_options.append(("▶️ npm start", "npm start", True))
                         if "test" in _scripts:
-                            _run_options.append(("🧪 npm test", "npm test -- --watchAll=false", False))
+                            _run_options.append(("🧪 npm test", "npm test", False))
                     except Exception:
                         pass
                 if (_pp_path / "requirements.txt").exists():
