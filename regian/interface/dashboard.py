@@ -2327,31 +2327,67 @@ def start_gui():
                     st.code(f"$ {_run_cmd}", language="bash")
 
                     if _run_is_server:
-                        # Live-server: toon commando + link, start niet automatisch
-                        st.info(
-                            f"⚠️ **{_run_label}** start een live server. "
-                            "Klik hieronder om het in een terminal te openen, of start het handmatig."
-                        )
-                        _url_col, _term_col = st.columns(2)
-                        with _url_col:
-                            _port = "3000" if "react" in _run_cmd.lower() or "next" in _run_cmd.lower() else "5173" if "vite" in _run_cmd.lower() else "8080"
-                            # Probeer poort te lezen uit npm script body in package.json
-                            if "npm" in _run_cmd and (_pp_path / "package.json").exists():
-                                try:
-                                    import re as _wf_re_port, json as _wf_port_json
-                                    _pkg_scripts = _wf_port_json.loads(
-                                        (_pp_path / "package.json").read_text()
-                                    ).get("scripts", {})
-                                    _script_key = _run_cmd.replace("npm run ", "").replace("npm ", "").strip()
-                                    _script_body = _pkg_scripts.get(_script_key, "")
-                                    _port_match = _wf_re_port.search(r"-p\s+(\d+)|--port[= ](\d+)|:(\d{4,5})", _script_body)
-                                    if _port_match:
-                                        _port = next(g for g in _port_match.groups() if g)
-                                except Exception:
-                                    pass
-                            st.link_button(f"🌐 Open 127.0.0.1:{_port}", f"http://127.0.0.1:{_port}")
-                        with _term_col:
-                            st.code(f"cd {_pp_run}\n{_run_cmd}", language="bash")
+                        # ── Poort detectie ──────────────────────────────────────────
+                        _port = "3000" if "react" in _run_cmd.lower() or "next" in _run_cmd.lower() else "5173" if "vite" in _run_cmd.lower() else "8080"
+                        if "npm" in _run_cmd and (_pp_path / "package.json").exists():
+                            try:
+                                import re as _wf_re_port, json as _wf_port_json
+                                _pkg_scripts = _wf_port_json.loads(
+                                    (_pp_path / "package.json").read_text()
+                                ).get("scripts", {})
+                                _script_key = _run_cmd.replace("npm run ", "").replace("npm ", "").strip()
+                                _script_body = _pkg_scripts.get(_script_key, "")
+                                _port_match = _wf_re_port.search(r"-p\s+(\d+)|--port[= ](\d+)|:(\d{4,5})", _script_body)
+                                if _port_match:
+                                    _port = next(g for g in _port_match.groups() if g)
+                            except Exception:
+                                pass
+
+                        # ── Server start/stop via Popen ─────────────────────────────
+                        import os as _wf_os, signal as _wf_signal
+                        _srv_key = f"srv_pid_{_pp_run}_{_run_cmd}"
+                        _srv_pid = st.session_state.get(_srv_key)
+
+                        # Controleer of process nog leeft
+                        _srv_running = False
+                        if _srv_pid:
+                            try:
+                                _wf_os.kill(_srv_pid, 0)
+                                _srv_running = True
+                            except OSError:
+                                _srv_running = False
+                                st.session_state.pop(_srv_key, None)
+                                _srv_pid = None
+
+                        _srv_col1, _srv_col2, _srv_col3 = st.columns([2, 2, 2])
+                        with _srv_col1:
+                            if not _srv_running:
+                                if st.button(f"▶️ Start {_run_label}", key="wf_srv_start", type="primary", use_container_width=True):
+                                    import subprocess as _wf_popen
+                                    _srv_proc = _wf_popen.Popen(
+                                        _run_cmd, shell=True, cwd=_pp_run,
+                                        stdout=_wf_popen.DEVNULL, stderr=_wf_popen.DEVNULL,
+                                    )
+                                    st.session_state[_srv_key] = _srv_proc.pid
+                                    import time as _wf_time; _wf_time.sleep(1)
+                                    st.rerun()
+                            else:
+                                st.success(f"✅ Server actief (PID {_srv_pid})", icon="🟢")
+                        with _srv_col2:
+                            if _srv_running:
+                                if st.button("🔴 Stop server", key="wf_srv_stop", use_container_width=True):
+                                    try:
+                                        _wf_os.kill(_srv_pid, _wf_signal.SIGTERM)
+                                    except ProcessLookupError:
+                                        pass
+                                    st.session_state.pop(_srv_key, None)
+                                    st.rerun()
+                        with _srv_col3:
+                            if _srv_running:
+                                st.link_button(f"🌐 Open 127.0.0.1:{_port}", f"http://127.0.0.1:{_port}", use_container_width=True)
+
+                        if not _srv_running:
+                            st.caption(f"Of handmatig: `cd {_pp_run}` → `{_run_cmd}`")
                     else:
                         if st.button(f"▶️ Uitvoeren: {_run_label}",
                                      key="wf_run_exec", type="primary"):
