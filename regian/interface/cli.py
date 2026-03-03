@@ -17,6 +17,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from regian.core.agent import registry, OrchestratorAgent, CONFIRM_REQUIRED
+from regian.core.action_log import log_action
+import uuid
 
 
 def _ensure_scheduler():
@@ -96,7 +98,9 @@ def _handle_command(raw: str):
 
     _print(f"⚡ Direct: /{name}({raw_args})", "cmd")
     _separator()
-    _print(registry.call_by_string(name, raw_args))
+    result = registry.call_by_string(name, raw_args)
+    log_action(name, {"args": raw_args} if raw_args else {}, result, source="cli")
+    _print(result)
 
 
 def _handle_chat(prompt: str, orchestrator: OrchestratorAgent):
@@ -107,6 +111,9 @@ def _handle_chat(prompt: str, orchestrator: OrchestratorAgent):
     if not plan:
         _print("⚠️  Geen plan gegenereerd. Probeer anders te formuleren.", "error")
         return
+
+    gid = str(uuid.uuid4())[:8]
+    log_action("__prompt__", {"prompt": prompt}, "", source="cli", group_id=gid)
 
     _separator()
     _print("📋 Plan:", "info")
@@ -134,7 +141,7 @@ def _handle_chat(prompt: str, orchestrator: OrchestratorAgent):
 
     _print("⚙️  Uitvoeren...", "info")
     _separator()
-    _print(orchestrator.execute_plan(plan))
+    _print(orchestrator.execute_plan(plan, source="cli", group_id=gid))
 
 
 # ── Hoofd-loop ─────────────────────────────────────────────────────────────────

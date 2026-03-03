@@ -235,3 +235,59 @@ class TestRunPython:
         from regian.skills.terminal import run_python
         result = run_python("print('hack')", cwd="../../etc")
         assert "❌" in result or "Verboden" in result
+
+
+class TestIsDestructivePythonCode:
+    """Tests voor is_destructive_python_code — detecteert schrijf- en verwijderbewerkingen."""
+
+    def _check(self, code: str) -> bool:
+        from regian.skills.terminal import is_destructive_python_code
+        return is_destructive_python_code(code)
+
+    # ── Destructieve code → True ──────────────────────────────────────
+    def test_open_schrijfmodus(self):
+        assert self._check("with open('out.txt', 'w') as f: f.write('x')")
+
+    def test_open_append_modus(self):
+        assert self._check("open('log.txt', 'a')")
+
+    def test_write_method(self):
+        assert self._check("file_handle.write('data')")
+
+    def test_write_text(self):
+        assert self._check("Path('out.md').write_text('inhoud')")
+
+    def test_write_bytes(self):
+        assert self._check("p.write_bytes(b'data')")
+
+    def test_os_remove(self):
+        assert self._check("os.remove('oud.txt')")
+
+    def test_os_unlink(self):
+        assert self._check("os.unlink('bestand.csv')")
+
+    def test_shutil_rmtree(self):
+        assert self._check("shutil.rmtree('build/')")
+
+    def test_path_unlink(self):
+        assert self._check("p.unlink()")
+
+    def test_os_rmdir(self):
+        assert self._check("os.rmdir('lege_map')")
+
+    # ── Veilige (lees-only) code → False ─────────────────────────────
+    def test_open_leesmodus(self):
+        assert not self._check("with open('data.csv', 'r', newline='') as f: pass")
+
+    def test_csv_reader(self):
+        code = "import csv\nreader = csv.DictReader(open('data.csv', 'r'))"
+        assert not self._check(code)
+
+    def test_print_statement(self):
+        assert not self._check("print('Omzet 2024:', revenue_2024)")
+
+    def test_variabele_toewijzing(self):
+        assert not self._check("revenue_2024 = 0.0\nrevenue_2025 = 0.0")
+
+    def test_lege_code(self):
+        assert not self._check("")

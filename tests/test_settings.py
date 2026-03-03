@@ -142,3 +142,346 @@ class TestRootDir:
         result = s.set_root_dir(str(new_dir))
         assert Path(result).exists()
         assert str(new_dir) in result
+
+
+# ── ActiveProject ───────────────────────────────────────────────────────────────
+
+class TestActiveProject:
+    def test_get_geeft_lege_string_als_standaard(self, monkeypatch):
+        monkeypatch.delenv("ACTIVE_PROJECT", raising=False)
+        from regian.settings import get_active_project
+        assert get_active_project() == ""
+
+    def test_get_geeft_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("ACTIVE_PROJECT", "mijn-project")
+        from regian.settings import get_active_project
+        assert get_active_project() == "mijn-project"
+
+    def test_set_schrijft_naar_env_variabele(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_active_project("nieuw-project")
+        assert os.environ.get("ACTIVE_PROJECT") == "nieuw-project"
+
+    def test_set_schrijft_naar_env_bestand(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_active_project("repo-proj")
+        assert "repo-proj" in tmp_env_file.read_text()
+
+    def test_clear_wist_env_variabele(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        monkeypatch.setenv("ACTIVE_PROJECT", "actief")
+        s.clear_active_project()
+        assert os.environ.get("ACTIVE_PROJECT") == ""
+
+    def test_clear_wist_uit_env_bestand(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_active_project("te-wissen")
+        s.clear_active_project()
+        content = tmp_env_file.read_text()
+        # De sleutel mag nog aanwezig zijn maar de waarde moet leeg zijn
+        assert "te-wissen" not in content
+
+    def test_roundtrip_set_en_get(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_active_project("testproject")
+        assert s.get_active_project() == "testproject"
+        s.clear_active_project()
+        assert s.get_active_project() == ""
+
+
+# ── ShellTimeout ────────────────────────────────────────────────────────────────
+
+class TestShellTimeout:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("SHELL_TIMEOUT", raising=False)
+        from regian.settings import get_shell_timeout
+        assert get_shell_timeout() == 30
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("SHELL_TIMEOUT", "60")
+        from regian.settings import get_shell_timeout
+        assert get_shell_timeout() == 60
+
+    def test_get_valt_terug_op_standaard_bij_ongeldige_waarde(self, monkeypatch):
+        monkeypatch.setenv("SHELL_TIMEOUT", "geen-getal")
+        from regian.settings import get_shell_timeout
+        assert get_shell_timeout() == 30
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_shell_timeout(45)
+        assert os.environ.get("SHELL_TIMEOUT") == "45"
+        assert "45" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_shell_timeout(120)
+        assert s.get_shell_timeout() == 120
+
+
+# ── LogMaxEntries ───────────────────────────────────────────────────────────────
+
+class TestLogMaxEntries:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("LOG_MAX_ENTRIES", raising=False)
+        from regian.settings import get_log_max_entries
+        assert get_log_max_entries() == 500
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("LOG_MAX_ENTRIES", "200")
+        from regian.settings import get_log_max_entries
+        assert get_log_max_entries() == 200
+
+    def test_get_valt_terug_op_standaard_bij_ongeldige_waarde(self, monkeypatch):
+        monkeypatch.setenv("LOG_MAX_ENTRIES", "niet-geldig")
+        from regian.settings import get_log_max_entries
+        assert get_log_max_entries() == 500
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_log_max_entries(1000)
+        assert os.environ.get("LOG_MAX_ENTRIES") == "1000"
+        assert "1000" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_log_max_entries(250)
+        assert s.get_log_max_entries() == 250
+
+
+# ── LogResultMaxChars ───────────────────────────────────────────────────────────
+
+class TestLogResultMaxChars:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("LOG_RESULT_MAX_CHARS", raising=False)
+        from regian.settings import get_log_result_max_chars
+        assert get_log_result_max_chars() == 300
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("LOG_RESULT_MAX_CHARS", "500")
+        from regian.settings import get_log_result_max_chars
+        assert get_log_result_max_chars() == 500
+
+    def test_get_valt_terug_op_standaard_bij_ongeldige_waarde(self, monkeypatch):
+        monkeypatch.setenv("LOG_RESULT_MAX_CHARS", "abc")
+        from regian.settings import get_log_result_max_chars
+        assert get_log_result_max_chars() == 300
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_log_result_max_chars(600)
+        assert os.environ.get("LOG_RESULT_MAX_CHARS") == "600"
+        assert "600" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_log_result_max_chars(150)
+        assert s.get_log_result_max_chars() == 150
+
+
+# ── AgentMaxIterations ──────────────────────────────────────────────────────────
+
+class TestAgentMaxIterations:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("AGENT_MAX_ITERATIONS", raising=False)
+        from regian.settings import get_agent_max_iterations
+        assert get_agent_max_iterations() == 5
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("AGENT_MAX_ITERATIONS", "10")
+        from regian.settings import get_agent_max_iterations
+        assert get_agent_max_iterations() == 10
+
+    def test_get_valt_terug_op_standaard_bij_ongeldige_waarde(self, monkeypatch):
+        monkeypatch.setenv("AGENT_MAX_ITERATIONS", "veel")
+        from regian.settings import get_agent_max_iterations
+        assert get_agent_max_iterations() == 5
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_agent_max_iterations(8)
+        assert os.environ.get("AGENT_MAX_ITERATIONS") == "8"
+        assert "8" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_agent_max_iterations(3)
+        assert s.get_agent_max_iterations() == 3
+
+
+# ── GeminiModels ────────────────────────────────────────────────────────────────
+
+class TestGeminiModels:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("GEMINI_MODELS", raising=False)
+        from regian.settings import get_gemini_models
+        result = get_gemini_models()
+        assert isinstance(result, list)
+        assert "gemini-2.5-flash" in result
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODELS", "model-a,model-b")
+        from regian.settings import get_gemini_models
+        assert get_gemini_models() == ["model-a", "model-b"]
+
+    def test_get_strips_whitespace(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODELS", " model-a , model-b ")
+        from regian.settings import get_gemini_models
+        assert get_gemini_models() == ["model-a", "model-b"]
+
+    def test_get_negeert_lege_onderdelen(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_MODELS", "model-a,,model-b,")
+        from regian.settings import get_gemini_models
+        assert "" not in get_gemini_models()
+        assert len(get_gemini_models()) == 2
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_gemini_models(["model-x", "model-y"])
+        assert "model-x" in os.environ.get("GEMINI_MODELS", "")
+        assert "model-x" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_gemini_models(["gemini-test-1", "gemini-test-2"])
+        assert s.get_gemini_models() == ["gemini-test-1", "gemini-test-2"]
+
+
+# ── OllamaModels ────────────────────────────────────────────────────────────────
+
+class TestOllamaModels:
+    def test_get_standaard(self, monkeypatch):
+        monkeypatch.delenv("OLLAMA_MODELS", raising=False)
+        from regian.settings import get_ollama_models
+        result = get_ollama_models()
+        assert isinstance(result, list)
+        assert "mistral" in result
+
+    def test_get_ingestelde_waarde(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODELS", "llama3,phi3")
+        from regian.settings import get_ollama_models
+        assert get_ollama_models() == ["llama3", "phi3"]
+
+    def test_get_negeert_lege_onderdelen(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_MODELS", "llama3,,phi3,")
+        from regian.settings import get_ollama_models
+        assert "" not in get_ollama_models()
+        assert len(get_ollama_models()) == 2
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_ollama_models(["custom-model"])
+        assert "custom-model" in os.environ.get("OLLAMA_MODELS", "")
+        assert "custom-model" in tmp_env_file.read_text()
+
+    def test_roundtrip(self, monkeypatch, tmp_env_file):
+        import regian.settings as s
+        monkeypatch.setattr(s, "ENV_FILE", tmp_env_file)
+        s.set_ollama_models(["test-llm", "another-llm"])
+        assert s.get_ollama_models() == ["test-llm", "another-llm"]
+
+
+# ── Log File Name Settings ──────────────────────────────────────────────────────
+
+class TestLogFileName:
+    def test_get_default(self, monkeypatch):
+        monkeypatch.delenv("LOG_FILE_NAME", raising=False)
+        from regian.settings import get_log_file_name
+        assert get_log_file_name() == "regian_action_log.jsonl"
+
+    def test_get_custom_value(self, monkeypatch):
+        monkeypatch.setenv("LOG_FILE_NAME", "my_log.jsonl")
+        from regian.settings import get_log_file_name
+        assert get_log_file_name() == "my_log.jsonl"
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_log_file_name("custom_log.jsonl")
+        assert os.environ.get("LOG_FILE_NAME") == "custom_log.jsonl"
+        assert "custom_log.jsonl" in tmp_env_file.read_text()
+
+    def test_set_lege_waarde_valt_terug_op_standaard(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_log_file_name("")
+        assert os.environ.get("LOG_FILE_NAME") == "regian_action_log.jsonl"
+
+    def test_get_negeert_lege_env_waarde(self, monkeypatch):
+        monkeypatch.setenv("LOG_FILE_NAME", "")
+        from regian.settings import get_log_file_name
+        assert get_log_file_name() == "regian_action_log.jsonl"
+
+
+# ── Jobs File Name Settings ─────────────────────────────────────────────────────
+
+class TestJobsFileName:
+    def test_get_default(self, monkeypatch):
+        monkeypatch.delenv("JOBS_FILE_NAME", raising=False)
+        from regian.settings import get_jobs_file_name
+        assert get_jobs_file_name() == "regian_jobs.json"
+
+    def test_get_custom_value(self, monkeypatch):
+        monkeypatch.setenv("JOBS_FILE_NAME", "my_jobs.json")
+        from regian.settings import get_jobs_file_name
+        assert get_jobs_file_name() == "my_jobs.json"
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_jobs_file_name("custom_jobs.json")
+        assert os.environ.get("JOBS_FILE_NAME") == "custom_jobs.json"
+        assert "custom_jobs.json" in tmp_env_file.read_text()
+
+    def test_set_lege_waarde_valt_terug_op_standaard(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_jobs_file_name("")
+        assert os.environ.get("JOBS_FILE_NAME") == "regian_jobs.json"
+
+    def test_get_negeert_lege_env_waarde(self, monkeypatch):
+        monkeypatch.setenv("JOBS_FILE_NAME", "")
+        from regian.settings import get_jobs_file_name
+        assert get_jobs_file_name() == "regian_jobs.json"
+
+
+# ── Agent Name settings ────────────────────────────────────────────────────────
+
+class TestAgentNameSettings:
+    def test_get_default(self, monkeypatch):
+        monkeypatch.delenv("AGENT_NAME", raising=False)
+        from regian.settings import get_agent_name
+        assert get_agent_name() == "Reggy"
+
+    def test_get_custom_value(self, monkeypatch):
+        monkeypatch.setenv("AGENT_NAME", "Max")
+        from regian.settings import get_agent_name
+        assert get_agent_name() == "Max"
+
+    def test_set_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_agent_name("Aria")
+        assert os.environ.get("AGENT_NAME") == "Aria"
+        assert "Aria" in tmp_env_file.read_text()
+
+    def test_set_lege_waarde_valt_terug_op_standaard(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_agent_name("")
+        assert os.environ.get("AGENT_NAME") == "Reggy"
+
+    def test_get_negeert_lege_env_waarde(self, monkeypatch):
+        monkeypatch.setenv("AGENT_NAME", "")
+        from regian.settings import get_agent_name
+        assert get_agent_name() == "Reggy"

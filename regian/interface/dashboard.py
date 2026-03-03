@@ -3,28 +3,93 @@ import importlib
 import inspect
 import json
 import pkgutil
+from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as _components
 import regian.skills as _skills_pkg
 from regian.core.agent import registry, OrchestratorAgent, RegianAgent, CONFIRM_REQUIRED
-from regian.skills.terminal import is_destructive_shell_command
+from regian.skills.terminal import is_destructive_shell_command, is_destructive_python_code
 from regian.core.scheduler import (
     get_scheduler, get_all_jobs, get_next_run,
     add_scheduled_job, remove_scheduled_job, toggle_scheduled_job,
     run_job_now_by_id, parse_schedule,
 )
+from regian import __version__ as _VERSION
 from regian.settings import (
     get_root_dir, set_root_dir,
     get_llm_provider, set_llm_provider,
     get_llm_model, set_llm_model,
     get_confirm_required, set_confirm_required,
     get_dangerous_patterns, set_dangerous_patterns,
+    get_user_avatar, set_user_avatar,
+    get_agent_name, set_agent_name,
+    get_active_project, set_active_project, clear_active_project,
+    get_shell_timeout, set_shell_timeout,
+    get_log_max_entries, set_log_max_entries,
+    get_log_result_max_chars, set_log_result_max_chars,
+    get_log_file_name, set_log_file_name,
+    get_jobs_file_name, set_jobs_file_name,
+    get_agent_max_iterations, set_agent_max_iterations,
+    get_gemini_models, set_gemini_models,
+    get_ollama_models, set_ollama_models,
+    _DEFAULT_GEMINI_MODELS, _DEFAULT_OLLAMA_MODELS,
 )
+import uuid
+from regian.core.action_log import log_action, get_log, get_log_grouped, clear_log, log_count
 
 
-_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-flash-latest"]
-_OLLAMA_MODELS = ["mistral", "llama3.1:8b", "llama3.2", "deepseek-r1:8b"]
+_GEMINI_MODELS = get_gemini_models()
+_OLLAMA_MODELS = get_ollama_models()
 
+
+def _inject_global_styles():
+    """Vervang 'Ask ChatGPT' door 'Ask Gemini' in Streamlit error display."""
+    js = """
+<script>
+(function() {
+  var doc = window.parent.document;
+  function patchChatGPT(root) {
+    root.querySelectorAll('a').forEach(function(el) {
+      if (el.innerText && el.innerText.includes('ChatGPT')) {
+        var errorText = '';
+        try {
+          var u = new URL(el.href);
+          errorText = u.searchParams.get('q') || u.searchParams.get('prompt') || '';
+        } catch(e) {}
+        el.innerText = el.innerText.replace('ChatGPT', 'Gemini');
+        el.href = errorText
+          ? 'https://gemini.google.com/app?q=' + encodeURIComponent(errorText)
+          : 'https://gemini.google.com/app';
+        el.target = '_blank';
+      }
+    });
+    root.querySelectorAll('button, span').forEach(function(el) {
+      if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3
+          && el.innerText && el.innerText.includes('ChatGPT')) {
+        el.innerText = el.innerText.replace('ChatGPT', 'Gemini');
+      }
+    });
+  }
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(m) {
+      m.addedNodes.forEach(function(n) {
+        if (n.nodeType === 1) patchChatGPT(n);
+      });
+    });
+  });
+  function start() {
+    if (doc.body) {
+      patchChatGPT(doc.body);
+      observer.observe(doc.body, { childList: true, subtree: true });
+    } else {
+      setTimeout(start, 100);
+    }
+  }
+  start();
+}());
+</script>
+"""
+    _components.html(js, height=0)
 
 def _inject_autocomplete():
     """Injecteer JS autocomplete dropdown + signature hint voor slash commands."""
@@ -39,8 +104,11 @@ def _inject_autocomplete():
         sig = inspect.signature(func)
         params = [
             {"name": p.name, "hint": (
-                p.name + (f": {p.annotation.__name__}" if p.annotation != inspect.Parameter.empty else "") +
-                (f" = {repr(p.default)}" if p.default != inspect.Parameter.empty else "")
+                p.name
+                + ((
+                    f": {p.annotation.__name__ if hasattr(p.annotation, '__name__') else str(p.annotation)}"
+                ) if p.annotation != inspect.Parameter.empty else "")
+                + (f" = {repr(p.default)}" if p.default != inspect.Parameter.empty else "")
             )}
             for p in sig.parameters.values()
         ]
@@ -251,14 +319,14 @@ def _inject_autocomplete():
 
 
 @st.cache_resource
-def get_orchestrator():
-    """Éénmalig aangemaakt voor de hele server — niet per sessie."""
+def get_orchestrator(active_project: str = ""):
+    """Gecached per actief project. Wis de cache via get_orchestrator.clear() bij projectwissel."""
     return OrchestratorAgent()
 
 
 @st.cache_resource
-def get_agent(provider: str, model: str):
-    """Éénmalig aangemaakt per provider+model combinatie."""
+def get_agent(provider: str, model: str, active_project: str = ""):
+    """Gecached per provider+model+project combinatie."""
     return RegianAgent(provider=provider, model=model)
 
 
@@ -266,6 +334,24 @@ def get_agent(provider: str, model: str):
 def _start_scheduler():
     """Start de achtergrond-scheduler éénmalig bij het laden van de app."""
     return get_scheduler()
+
+
+_TYPE_ICONS_SIDEBAR = {"software": "💻", "docs": "📄", "data": "📊", "generic": "📁"}
+
+
+def _load_project_list() -> list[dict]:
+    """Laad alle projectmanifesten uit de werkmap (directe scan, geen skill-import)."""
+    root = Path(get_root_dir())
+    projects = []
+    if root.exists():
+        for entry in sorted(root.iterdir()):
+            mp = entry / ".regian_project.json"
+            if entry.is_dir() and mp.exists():
+                try:
+                    projects.append(json.loads(mp.read_text(encoding="utf-8")))
+                except (json.JSONDecodeError, OSError):
+                    pass
+    return projects
 
 
 def _step_needs_confirm(step: dict, confirm_set: set) -> bool:
@@ -276,6 +362,8 @@ def _step_needs_confirm(step: dict, confirm_set: set) -> bool:
     tool = step.get("tool", "")
     if tool == "run_shell":
         return is_destructive_shell_command(step.get("args", {}).get("command", ""))
+    if tool == "run_python":
+        return is_destructive_python_code(step.get("args", {}).get("code", ""))
     return tool in confirm_set
 
 
@@ -288,19 +376,305 @@ def _handle_slash_command(prompt: str) -> tuple:
     name = parts[0].strip()
     raw_args = parts[1].strip() if len(parts) > 1 else ""
     result = registry.call_by_string(name, raw_args)
+    log_action(name, {"args": raw_args} if raw_args else {}, result, source="direct")
     badge = f"/{name}({raw_args})" if raw_args else f"/{name}()"
     return result, badge
+
+
+_UPLOAD_FILE_TYPES = [
+    "txt", "md", "py", "js", "ts", "jsx", "tsx",
+    "json", "csv", "yaml", "yml",
+    "html", "xml", "css", "sh", "toml", "ini",
+    "rs", "go", "java", "c", "cpp", "h", "sql", "pdf",
+]
+
+
+def _read_uploaded_file(uploaded_file) -> str:
+    """Leest de inhoud van een geüpload bestand als platte tekst."""
+    name = uploaded_file.name.lower()
+    if name.endswith(".pdf"):
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(uploaded_file)
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+            return text.strip() or "[PDF bevat geen extraheerbare tekst]"
+        except Exception as e:
+            return f"[Fout bij lezen PDF: {e}]"
+    else:
+        try:
+            raw = uploaded_file.read()
+            return raw.decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"[Fout bij lezen bestand: {e}]"
+
+
+# ── Chatgeschiedenis persistentie ─────────────────────────────────────────────
+
+def _chat_file() -> "Path":
+    """Geeft het pad naar het chatgeschiedenisbestand (project-specifiek of globaal)."""
+    from regian.settings import get_active_project, get_root_dir
+
+    root = Path(get_root_dir())
+    name = get_active_project()
+    if name:
+        try:
+            from regian.skills.project import _read_manifest
+
+            m = _read_manifest(name)
+            return Path(m["path"]) / ".regian_chat.json"
+        except Exception:
+            pass
+    return root / ".regian_chat.json"
+
+
+def _load_chat_history() -> list:
+    """Laadt de persistente chatgeschiedenis van schijf."""
+    f = _chat_file()
+    if f.exists():
+        try:
+            return json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+
+def _save_chat_history(messages: list) -> None:
+    """Slaat de volledige chatgeschiedenis op naar schijf."""
+    try:
+        f = _chat_file()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _append_msg(role: str, content: str, badge=None) -> None:
+    """Voegt een bericht toe aan de sessie én slaat op naar schijf."""
+    msg: dict = {"role": role, "content": content}
+    if badge is not None:
+        msg["badge"] = badge
+    st.session_state.messages.append(msg)
+    _save_chat_history(st.session_state.messages)
+
+
+# ── Uploads automatisch opslaan ───────────────────────────────────────────────
+
+def _uploads_dir() -> "Path":
+    """Geeft de uploads-map voor het actieve project (of de werkmap-root)."""
+    from regian.settings import get_active_project, get_root_dir
+
+    root = Path(get_root_dir())
+    name = get_active_project()
+    if name:
+        try:
+            from regian.skills.project import _read_manifest
+
+            m = _read_manifest(name)
+            return Path(m["path"]) / "uploads"
+        except Exception:
+            pass
+    return root / "uploads"
+
+
+def _save_uploaded_file(uf) -> "Path":
+    """Slaat een geüpload bestand op in de uploads-map en geeft het pad terug."""
+    udir = _uploads_dir()
+    udir.mkdir(parents=True, exist_ok=True)
+    dest = udir / uf.name
+    dest.write_bytes(uf.getvalue())
+    return dest
+
+
+# ── Resultaten opslaan ────────────────────────────────────────────────────────
+
+def _results_dir() -> "Path":
+    """Geeft de resultaten-map voor het actieve project (of de werkmap-root)."""
+    from regian.settings import get_active_project, get_root_dir
+
+    root = Path(get_root_dir())
+    name = get_active_project()
+    if name:
+        try:
+            from regian.skills.project import _read_manifest
+
+            m = _read_manifest(name)
+            return Path(m["path"]) / "results"
+        except Exception:
+            pass
+    return root / "results"
+
+
+def _save_result(content: str) -> "Path":
+    """Sla een LLM-resultaat op als Markdown-bestand in de resultaten-map."""
+    from datetime import datetime
+
+    rdir = _results_dir()
+    rdir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    dest = rdir / f"{ts}_resultaat.md"
+    dest.write_text(content, encoding="utf-8")
+    return dest
+
+_MAX_KNOWLEDGE_CHARS = 8_000
+_MAX_UPLOADS_CHARS = 50_000
+
+
+def _knowledge_dir_dash() -> "Path":
+    """Geeft de kennisbank-map voor het actieve project (dashboard variant)."""
+    from regian.settings import get_active_project, get_root_dir
+
+    root = Path(get_root_dir())
+    name = get_active_project()
+    if name:
+        try:
+            from regian.skills.project import _read_manifest
+
+            m = _read_manifest(name)
+            return Path(m["path"]) / ".regian_knowledge"
+        except Exception:
+            pass
+    return root / ".regian_knowledge"
+
+
+def _load_knowledge_context() -> str:
+    """Laadt de kennisbank-bestanden als context-blok voor het LLM (max 8 000 tekens)."""
+    kdir = _knowledge_dir_dash()
+    if not kdir.exists():
+        return ""
+    files = sorted(f for f in kdir.iterdir() if f.is_file())
+    if not files:
+        return ""
+
+    parts: list[str] = []
+    total = 0
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+            remaining = _MAX_KNOWLEDGE_CHARS - total
+            if len(text) > remaining:
+                text = text[:remaining] + "\n[...afgekapt]"
+            parts.append(f"--- Kennisbank: {f.name} ---\n{text}\n---")
+            total += len(text)
+            if total >= _MAX_KNOWLEDGE_CHARS:
+                break
+        except Exception:
+            continue
+
+    if not parts:
+        return ""
+    return (
+        "=== Kennisbank (projectdocumenten) ===\n"
+        + "\n\n".join(parts)
+        + "\n=== Einde kennisbank ===\n\n"
+    )
+
+
+def _load_uploads_context() -> str:
+    """Laadt eerder opgeladen bestanden als context-blok voor het LLM (max 50 000 tekens)."""
+    udir = _uploads_dir()
+    if not udir.exists():
+        return ""
+    files = sorted(f for f in udir.iterdir() if f.is_file())
+    if not files:
+        return ""
+
+    parts: list[str] = []
+    total = 0
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+            remaining = _MAX_UPLOADS_CHARS - total
+            if len(text) > remaining:
+                text = text[:remaining] + "\n[...afgekapt]"
+            parts.append(f"--- Upload: {f.name} ---\n{text}\n---")
+            total += len(text)
+            if total >= _MAX_UPLOADS_CHARS:
+                break
+        except Exception:
+            continue
+
+    if not parts:
+        return ""
+    return (
+        "=== Eerder opgeladen bestanden ===\n"
+        + "\n\n".join(parts)
+        + "\n=== Einde uploads ===\n\n"
+    )
 
 
 def start_gui():
     st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀", layout="wide")
     st.title("🚀 Regian OS - Control Center")
+    _inject_global_styles()
 
-    # ── Sidebar (minimaal) ────────────────────────────────────
+    # ── Sidebar ───────────────────────────────────────────────
     _start_scheduler()  # start achtergrond-scheduler éénmalig
-    st.sidebar.caption(f"🔧 {len(registry.tools)} skills geladen")
-    if st.sidebar.button("🗑️ Reset Chat"):
+    _active_proj_now = get_active_project()
+    _proj_type_icon = ""
+    if _active_proj_now:
+        _all_manifests = _load_project_list()
+        _active_manifest = next((p for p in _all_manifests if p["name"] == _active_proj_now), None)
+        if _active_manifest:
+            _proj_type_icon = _TYPE_ICONS_SIDEBAR.get(_active_manifest.get("type", ""), "📁")
+
+    st.sidebar.markdown(
+        f"""
+<div style="
+    background:#1e1e2e;
+    border:1px solid #333;
+    border-radius:8px;
+    padding:10px 14px 10px;
+    margin-bottom:8px;
+    font-family:sans-serif;
+">
+  <div style="font-size:1.05rem;font-weight:700;color:#e0e0e0;margin-bottom:6px;">
+    🚀 Regian OS
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:{'6px' if _active_proj_now else '0'};">
+    <span style="font-size:0.78rem;color:#888;">🔧 {len(registry.tools)} skills</span>
+    <span style="font-size:0.75rem;background:#2a2a3e;color:#7c8cff;
+                 padding:2px 7px;border-radius:10px;font-weight:600;">v{_VERSION}</span>
+  </div>
+  {f'''<div style="font-size:0.8rem;background:#1a2a1a;border:1px solid #2a4a2a;
+               border-radius:6px;padding:4px 8px;color:#7ddb7d;">
+    {_proj_type_icon} <strong>{_active_proj_now}</strong>
+  </div>''' if _active_proj_now else ''}
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    # ── Project selector ──────────────────────────────────────
+    _all_projects = _load_project_list()
+    _proj_names = [p["name"] for p in _all_projects]
+    _NO_PROJECT = "(geen project)"
+    _selector_options = [_NO_PROJECT] + _proj_names
+    _current_selection = _active_proj_now if _active_proj_now in _proj_names else _NO_PROJECT
+    _selected = st.sidebar.selectbox(
+        "📁 Project",
+        _selector_options,
+        index=_selector_options.index(_current_selection),
+        key="sidebar_project_select",
+        label_visibility="collapsed",
+    )
+    if _selected != _current_selection:
+        if _selected == _NO_PROJECT:
+            clear_active_project()
+            st.session_state.active_project = ""
+        else:
+            from regian.settings import set_active_project as _sap
+            _sap(_selected)
+            # activeer ook het manifest-vlag
+            from regian.skills.project import activate_project as _ap
+            _ap(_selected)
+            st.session_state.active_project = _selected
+        get_orchestrator.clear()
+        get_agent.clear()
+        st.rerun()
+
+    if st.sidebar.button("🗑️ Reset Chat", use_container_width=True):
         st.session_state.messages = []
+        _save_chat_history([])
         st.rerun()
 
     # ── Cron notificaties ─────────────────────────────────────
@@ -333,22 +707,53 @@ def start_gui():
         else:
             st.caption("Geen nieuwe meldingen.")
 
+    # ── Uploads-widget ────────────────────────────────────────
+    _udir = _uploads_dir()
+    _ufiles = sorted(_udir.iterdir()) if _udir.exists() else []
+    _up_label = f"📎 Uploads ({len(_ufiles)})" if _ufiles else "📎 Uploads (leeg)"
+    with st.sidebar.expander(_up_label, expanded=False):
+        if _ufiles:
+            for _uf2 in _ufiles:
+                _usz = _uf2.stat().st_size
+                _usz_s = f"{_usz / 1024:.1f} KB" if _usz >= 1024 else f"{_usz} B"
+                st.markdown(f"📄 `{_uf2.name}` — {_usz_s}")
+            st.caption("Inhoud wordt automatisch als context meegegeven bij elke vraag.")
+        else:
+            st.caption("Nog geen uploads.")
+
+    # ── Kennisbank-widget ─────────────────────────────────────
+    _kdir = _knowledge_dir_dash()
+    _kfiles = sorted(_kdir.iterdir()) if _kdir.exists() else []
+    _kb_label = f"📚 Kennisbank ({len(_kfiles)})" if _kfiles else "📚 Kennisbank (leeg)"
+    with st.sidebar.expander(_kb_label, expanded=False):
+        if _kfiles:
+            for _kf in _kfiles:
+                _ksz = _kf.stat().st_size
+                _ksz_s = f"{_ksz / 1024:.1f} KB" if _ksz >= 1024 else f"{_ksz} B"
+                st.markdown(f"📄 `{_kf.name}` — {_ksz_s}")
+            st.caption("Context wordt automatisch bij elke LLM-vraag meegegeven.")
+        else:
+            st.caption("Nog geen kennisbestanden.")
+        st.caption("Gebruik `/add_to_knowledge <pad>` om bestanden toe te voegen.")
+
     # ── Session state defaults (éénmalig laden uit .env) ─────
     if "provider" not in st.session_state:
         st.session_state.provider = get_llm_provider()
     if "model" not in st.session_state:
         st.session_state.model = get_llm_model()
+    if "active_project" not in st.session_state:
+        st.session_state.active_project = get_active_project()
 
     # ── Tabs ──────────────────────────────────────────────────
-    tab_chat, tab_help, tab_cron, tab_settings = st.tabs([
-        "💬 Chat", "📖 Help & Commands", "📅 Cron", "⚙️ Instellingen"
+    tab_chat, tab_help, tab_cron, tab_log, tab_settings = st.tabs([
+        "💬 Chat", "📖 Help & Commands", "📅 Cron", "📋 Log", "⚙️ Instellingen"
     ])
 
     # ── CHAT TAB ──────────────────────────────────────────────
     with tab_chat:
         _inject_autocomplete()
         if "messages" not in st.session_state:
-            st.session_state.messages = []
+            st.session_state.messages = _load_chat_history()
         if "pending_plan" not in st.session_state:
             st.session_state.pending_plan = None
 
@@ -359,83 +764,225 @@ def start_gui():
             plan = st.session_state.pending_plan
 
             # Toon chatgeschiedenis als context
+            _avatar = get_user_avatar()
+            _agent_name = get_agent_name()
             for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    st.markdown(message["content"])
+                if message["role"] == "user":
+                    with st.chat_message("user", avatar=_avatar):
+                        st.markdown(message["content"])
+                else:
+                    with st.chat_message(_agent_name, avatar="🤖"):
+                        if message.get("badge"):
+                            st.info(f"Direct: {message['badge']}")
+                        st.markdown(message["content"])
 
             st.warning("⚠️ **Bevestiging vereist** — dit plan bevat destructieve operaties:")
             for i, step in enumerate(plan, 1):
                 tool = step.get("tool", "")
                 args = step.get("args", {})
                 icon = "🔴" if _step_needs_confirm(step, confirm_set) else "🟢"
-                st.markdown(f"{icon} **Stap {i}:** `{tool}` — {args}")
+                if tool == "run_python" and "code" in args:
+                    st.markdown(f"{icon} **Stap {i}:** `run_python`")
+                    st.code(args["code"], language="python")
+                elif tool == "run_shell" and "command" in args:
+                    st.markdown(f"{icon} **Stap {i}:** `run_shell`")
+                    st.code(args["command"], language="bash")
+                    if args.get("cwd"):
+                        st.caption(f"Werkmap: `{args['cwd']}`")
+                else:
+                    _arg_str = "  \n".join(f"**{k}**: `{v}`" for k, v in args.items()) if args else "—"
+                    st.markdown(f"{icon} **Stap {i}:** `{tool}`  \n{_arg_str}")
 
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ Bevestigen & uitvoeren", type="primary"):
-                    result = get_orchestrator().execute_plan(plan)
-                    st.session_state.messages.append({"role": "assistant", "content": result})
+                    gid = st.session_state.get("pending_group_id")
+                    result = get_orchestrator(st.session_state.active_project).execute_plan(plan, group_id=gid)
+                    _append_msg("assistant", result)
                     st.session_state.pending_plan = None
+                    st.session_state.pending_group_id = None
                     st.rerun()
             with col2:
                 if st.button("❌ Annuleren"):
-                    st.session_state.messages.append({"role": "assistant", "content": "❌ Opdracht geannuleerd."})
+                    _append_msg("assistant", "❌ Opdracht geannuleerd.")
                     st.session_state.pending_plan = None
                     st.rerun()
 
         else:
             # ── Normale chat ───────────────────────────────────────
+            _avatar = get_user_avatar()
+            _agent_name = get_agent_name()
             for message in st.session_state.messages:
-                with st.chat_message(message["role"]):
-                    if message.get("badge"):
-                        st.info(f"Direct: {message['badge']}")
-                    st.markdown(message["content"])
+                if message["role"] == "user":
+                    with st.chat_message("user", avatar=_avatar):
+                        st.markdown(message["content"])
+                else:
+                    with st.chat_message(_agent_name, avatar="🤖"):
+                        if message.get("badge"):
+                            st.info(f"Direct: {message['badge']}")
+                        st.markdown(message["content"])
 
-            if prompt := st.chat_input("Wat gaan we doen? (Typ / voor directe commands)"):
-                st.session_state.messages.append({"role": "user", "content": prompt})
+            if prompt := st.chat_input(
+                "Wat gaan we doen? (Typ / voor directe commands)",
+                accept_file="multiple",
+                file_type=_UPLOAD_FILE_TYPES,
+            ):
+                # Haal tekst en bestanden op (ChatInputValue óf plain string)
+                if isinstance(prompt, str):
+                    typed_prompt = prompt
+                    uploaded_files: list = []
+                else:
+                    typed_prompt = prompt.text or ""
+                    uploaded_files = list(prompt.files or [])
+
+                # Guard: niets om te verwerken
+                if not typed_prompt and not uploaded_files:
+                    st.rerun()
+
+                # Weergavetekst (gebruikt alleen bestandsnamen, niet de inhoud)
+                _file_names = ", ".join(_uf.name for _uf in uploaded_files)
+                if uploaded_files and typed_prompt:
+                    display_prompt = f"{typed_prompt}\n\n📎 *{_file_names}*"
+                elif uploaded_files:
+                    display_prompt = f"📎 *{_file_names}*"
+                else:
+                    display_prompt = typed_prompt
+
+                # ── Toon de gebruikersvraag meteen, nog vóór verwerking ──
+                with st.chat_message("user", avatar=_avatar):
+                    st.markdown(display_prompt)
+                _append_msg("user", display_prompt)
 
                 badge = None
-                if prompt.startswith("/"):
-                    stripped = prompt[1:].strip()
-                    if not stripped:
-                        response = registry.list_commands()
-                        st.session_state.messages.append({"role": "assistant", "content": response})
-                        st.rerun()
-                    else:
-                        # HITL voor destructieve /run_shell commando's
-                        _parts = stripped.split(" ", 1)
-                        _slash_name = _parts[0].strip()
-                        _slash_arg = _parts[1].strip() if len(_parts) > 1 else ""
-                        if _slash_name == "run_shell" and is_destructive_shell_command(_slash_arg):
-                            st.session_state.pending_plan = [{"tool": "run_shell", "args": {"command": _slash_arg}}]
+                if typed_prompt.startswith("/"):
+                    stripped = typed_prompt[1:].strip()
+                    with st.chat_message(_agent_name, avatar="🤖"):
+                        if uploaded_files:
+                            response = "⚠️ Bestandsbijlagen worden genegeerd bij directe commands. Verwijder / voor LLM-verwerking van bestanden."
+                            st.warning(response)
+                            _append_msg("assistant", response)
                             st.rerun()
+                        if not stripped:
+                            response = registry.list_commands()
+                            st.markdown(response)
+                            _append_msg("assistant", response)
                         else:
-                            response, badge = _handle_slash_command(prompt)
-                            st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
-                            st.rerun()
-                else:
-                    with st.spinner("Planner is aan het werk..."):
-                        plan = get_orchestrator().plan(prompt)
-
-                    # Controleer of plan gevaarlijke stappen bevat
-                    dangerous = [s for s in plan if _step_needs_confirm(s, confirm_set)]
-                    if dangerous:
-                        st.session_state.pending_plan = plan
-                        st.rerun()
-                    else:
-                        with st.spinner("Uitvoeren..."):
-                            if plan:
-                                response = get_orchestrator().execute_plan(plan)
+                            # HITL voor destructieve /run_shell commando's
+                            _parts = stripped.split(" ", 1)
+                            _slash_name = _parts[0].strip()
+                            _slash_arg = _parts[1].strip() if len(_parts) > 1 else ""
+                            if _slash_name == "run_shell" and is_destructive_shell_command(_slash_arg):
+                                st.session_state.pending_plan = [{"tool": "run_shell", "args": {"command": _slash_arg}}]
+                                st.rerun()
                             else:
-                                response = get_orchestrator().run(prompt)
-                        st.session_state.messages.append({"role": "assistant", "content": response, "badge": badge})
-                        st.rerun()
+                                response, badge = _handle_slash_command(typed_prompt)
+                                if badge:
+                                    st.info(f"Direct: {badge}")
+                                st.markdown(response)
+                                _append_msg("assistant", response, badge)
+                else:
+                    # ── Fase 1 + 2: Bestanden lezen → Plan opstellen → Uitvoeren ─────
+                    with st.chat_message(_agent_name, avatar="🤖"):
+                        _n_files = len(uploaded_files)
+                        _n_prep = _n_files + 1  # N bestanden + 1 plan-stap
+                        with st.status(f"🧠 Voorbereiden... (0/{_n_prep})", expanded=True) as _status:
+
+                            # ── Bestanden lezen (stap 1 t/m N) ────────────────────
+                            file_parts = []
+                            for _fi, _uf in enumerate(uploaded_files, 1):
+                                st.write(f"📂 Stap {_fi}/{_n_prep}: `{_uf.name}` lezen...")
+                                _status.update(label=f"📂 Bestanden lezen... ({_fi}/{_n_prep})")
+                                _content = _read_uploaded_file(_uf)
+                                file_parts.append(f"--- Bijlage: {_uf.name} ---\n{_content}\n---")
+                                try:
+                                    _save_uploaded_file(_uf)
+                                except Exception:
+                                    pass
+
+                            # Bouw effective_prompt
+                            if file_parts:
+                                _file_block = "\n\n".join(file_parts)
+                                effective_prompt = f"{_file_block}\n\n{typed_prompt}".strip() if typed_prompt else _file_block
+                            else:
+                                effective_prompt = typed_prompt
+
+                            # Uploads-context toevoegen (eerder opgeladen bestanden)
+                            _up_ctx = _load_uploads_context()
+                            if _up_ctx:
+                                effective_prompt = _up_ctx + effective_prompt
+
+                            # Kennisbank-context toevoegen
+                            _kb_ctx = _load_knowledge_context()
+                            if _kb_ctx:
+                                effective_prompt = _kb_ctx + effective_prompt
+
+                            # ── Plan genereren (laatste prep-stap) ─────────────────
+                            st.write(f"🧠 Stap {_n_prep}/{_n_prep}: Plan genereren...")
+                            _status.update(label=f"🧠 Plan genereren... ({_n_prep}/{_n_prep})")
+                            plan = get_orchestrator(st.session_state.active_project).plan(effective_prompt)
+                            gid = str(uuid.uuid4())[:8]
+                            log_action("__prompt__", {"prompt": display_prompt}, "", source="chat", group_id=gid)
+                            dangerous = [s for s in plan if _step_needs_confirm(s, confirm_set)]
+
+                            if dangerous:
+                                _status.update(label="⚠️ Bevestiging vereist", state="error", expanded=True)
+                                st.session_state.pending_plan = plan
+                                st.session_state.pending_group_id = gid
+                                st.rerun()
+                            elif not plan:
+                                # Geen tool-plan → directe LLM-respons
+                                _status.update(label=f"💬 {_agent_name} antwoordt...", state="running", expanded=False)
+
+                            if plan and not dangerous:
+                                n = len(plan)
+                                st.write(f"📋 **{n} stap{'pen' if n > 1 else ''} gepland**")
+                                for i, step in enumerate(plan, 1):
+                                    _icon = "🔴" if _step_needs_confirm(step, confirm_set) else "⚙️"
+                                    st.write(f"{_icon} Stap {i}/{n}: `{step.get('tool', '')}`")
+                                _status.update(label=f"🚀 Uitvoeren ({n} stap{'pen' if n > 1 else ''})...", state="running")
+
+                                # ── Fase 2: Stap-voor-stap uitvoeren ──────────────
+                                step_results = []
+                                for i, step in enumerate(plan, 1):
+                                    tool_name = step.get("tool", "")
+                                    args = step.get("args", {})
+                                    st.write(f"▶️ Stap {i}/{n}: `{tool_name}`...")
+                                    result = registry.call(tool_name, args)
+                                    log_action(tool_name, args, result, source="chat", group_id=gid)
+                                    preview = result[:120] + ("…" if len(result) > 120 else "")
+                                    st.write(f"   ✅ {preview}")
+                                    step_results.append(f"✅ **{tool_name}**: {result}")
+
+                                response = "\n\n".join(step_results)
+                                _status.update(
+                                    label=f"✅ {n} stap{'pen' if n > 1 else ''} uitgevoerd",
+                                    state="complete",
+                                    expanded=False,
+                                )
+                                st.markdown(response)
+                                try:
+                                    _saved_path = _save_result(response)
+                                    st.caption(f"💾 Opgeslagen als `results/{_saved_path.name}`")
+                                except Exception:
+                                    pass
+                                _append_msg("assistant", response)
+
+                            elif not plan and not dangerous:
+                                response = get_orchestrator(st.session_state.active_project).run(effective_prompt)
+                                _status.update(label="✅ Klaar", state="complete", expanded=False)
+                                st.markdown(response)
+                                try:
+                                    _saved_path = _save_result(response)
+                                    st.caption(f"💾 Opgeslagen als `results/{_saved_path.name}`")
+                                except Exception:
+                                    pass
+                                _append_msg("assistant", response)
 
     # ── HELP TAB ──────────────────────────────────────────────
     with tab_help:
         sub = st.radio(
             "Weergave",
-            ["📋 Commands", "📚 Documentatie"],
+            ["📋 Commands", "📚 Documentatie", "📘 Handleiding"],
             horizontal=True,
             label_visibility="collapsed",
             key="help_sub",
@@ -474,7 +1021,7 @@ def start_gui():
             else:
                 st.info(f"Geen commands gevonden voor '{cmd_filter}'.")
 
-        else:  # Documentatie
+        elif sub == "📚 Documentatie":  # Documentatie
             st.subheader("📚 Skill Documentatie")
             search = st.text_input(
                 "🔍 Filter",
@@ -513,6 +1060,33 @@ def start_gui():
                         doc = inspect.getdoc(func) or "Geen beschrijving."
                         st.markdown(f"**`/{name}{sig}`**")
                         st.caption(doc)
+
+        elif sub == "📘 Handleiding":
+            _HANDLEIDING = Path(__file__).parent.parent.parent / "docs" / "handleiding.md"
+            st.markdown("""
+<style>
+.handleiding h1 { font-size: 1.7rem; font-weight: 700; margin-top: 0.2rem; margin-bottom: 0.4rem; border-bottom: 2px solid #444; padding-bottom: 0.3rem; }
+.handleiding h2 { font-size: 1.25rem; font-weight: 700; margin-top: 1.6rem; margin-bottom: 0.3rem; color: #e0e0e0; }
+.handleiding h3 { font-size: 1.05rem; font-weight: 600; margin-top: 1.1rem; margin-bottom: 0.2rem; color: #c0c0c0; }
+.handleiding p  { line-height: 1.65; margin-bottom: 0.5rem; }
+.handleiding table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.88rem; }
+.handleiding th { background: #2a2a2a; color: #ddd; text-align: left; padding: 6px 10px; border: 1px solid #444; }
+.handleiding td { padding: 5px 10px; border: 1px solid #333; vertical-align: top; }
+.handleiding tr:nth-child(even) td { background: #1e1e1e; }
+.handleiding code { background: #2a2a2a; color: #e06c75; padding: 1px 5px; border-radius: 3px; font-size: 0.85rem; }
+.handleiding pre  { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
+.handleiding pre code { background: none; color: #abb2bf; padding: 0; font-size: 0.82rem; }
+.handleiding blockquote { border-left: 3px solid #555; margin: 0.5rem 0; padding: 0.3rem 0.8rem; color: #aaa; font-style: italic; }
+.handleiding ul, .handleiding ol { padding-left: 1.4rem; margin-bottom: 0.5rem; }
+.handleiding li { margin-bottom: 0.2rem; line-height: 1.6; }
+.handleiding hr { border: none; border-top: 1px solid #333; margin: 1.2rem 0; }
+</style>
+""", unsafe_allow_html=True)
+            if _HANDLEIDING.exists():
+                content = _HANDLEIDING.read_text(encoding="utf-8")
+                st.markdown(f'<div class="handleiding">\n\n{content}\n\n</div>', unsafe_allow_html=True)
+            else:
+                st.error(f"Handleiding niet gevonden: `{_HANDLEIDING}`")
 
     # ── CRON TAB ─────────────────────────────────────────────────
     with tab_cron:
@@ -634,6 +1208,91 @@ def start_gui():
                         with st.expander("📄 Laatste output"):
                             st.code(last_output, language=None)
 
+    # ── LOG TAB ───────────────────────────────────────────────
+    with tab_log:
+        st.subheader("📋 Actie-log")
+
+        total = log_count()
+        col_info, col_clear = st.columns([4, 1])
+        with col_info:
+            st.caption(f"{total} entries in log")
+        with col_clear:
+            if st.button("🗑️ Log wissen", key="clear_action_log"):
+                clear_log()
+                st.success("Log gewist.")
+                st.rerun()
+
+        log_view = st.radio(
+            "Weergave",
+            ["🕐 Chronologisch", "💬 Per opdracht"],
+            horizontal=True,
+            key="log_view",
+            label_visibility="collapsed",
+        )
+
+        _SOURCE_ICONS = {"chat": "💬", "direct": "⚡", "cron": "📅", "cli": "🖥️"}
+
+        if log_view == "💬 Per opdracht":
+            groups = get_log_grouped(limit_groups=100)
+            if not groups:
+                st.info("Nog geen gegroepeerde opdrachten in de log.")
+            else:
+                st.caption(f"{len(groups)} opdrachten gevonden")
+                for grp in groups:
+                    prompt_text = grp["prompt"] or "(geen prompt)"
+                    steps = grp["steps"]
+                    src_icon = _SOURCE_ICONS.get(grp.get("source", ""), "❓")
+                    label = f"{src_icon} {grp['ts']}  ·  {prompt_text[:80]}"
+                    with st.expander(label, expanded=False):
+                        st.markdown(f"**Prompt:** {prompt_text}")
+                        if not steps:
+                            st.caption("(geen tool-aanroepen)")
+                        for i, e in enumerate(steps, 1):
+                            tool = e.get("tool", "")
+                            args = e.get("args", {})
+                            result = e.get("result", "")
+                            st.markdown(f"**Stap {i}: `{tool}`**")
+                            if args:
+                                st.json(args)
+                            st.code(result, language=None)
+
+        else:
+            entries = get_log(limit=200)
+            if not entries:
+                st.info("Nog geen acties gelogd.")
+            else:
+                sources = sorted({e.get("source", "") for e in entries})
+                filter_source = st.selectbox(
+                    "Filter op bron",
+                    ["Alle"] + sources,
+                    key="log_filter_source",
+                    label_visibility="collapsed",
+                )
+                filter_tool = st.text_input(
+                    "Filter op skill",
+                    placeholder="bijv. run_shell, write_file …",
+                    key="log_filter_tool",
+                )
+                filtered = [
+                    e for e in entries
+                    if (filter_source == "Alle" or e.get("source") == filter_source)
+                    and (not filter_tool or filter_tool.lower() in e.get("tool", "").lower())
+                    and e.get("tool") != "__prompt__"
+                ]
+                st.caption(f"{len(filtered)} entries weergegeven")
+                for e in filtered:
+                    src_icon = _SOURCE_ICONS.get(e.get("source", ""), "❓")
+                    tool = e.get("tool", "")
+                    ts = e.get("ts", "")
+                    args = e.get("args", {})
+                    result = e.get("result", "")
+                    with st.expander(f"{src_icon} `{tool}` — {ts}", expanded=False):
+                        if args:
+                            st.markdown("**Args:**")
+                            st.json(args)
+                        st.markdown("**Resultaat:**")
+                        st.code(result, language=None)
+
     # ── INSTELLINGEN TAB ──────────────────────────────────────
     with tab_settings:
         st.subheader("⚙️ Instellingen")
@@ -659,7 +1318,7 @@ def start_gui():
             index=provider_options.index(current_provider) if current_provider in provider_options else 0,
             key="settings_provider",
         )
-        model_options = _GEMINI_MODELS if new_provider == "gemini" else _OLLAMA_MODELS
+        model_options = get_gemini_models() if new_provider == "gemini" else get_ollama_models()
         current_model = st.session_state.model if st.session_state.model in model_options else model_options[0]
         new_model = st.selectbox(
             "Model",
@@ -672,9 +1331,56 @@ def start_gui():
             set_llm_model(new_model)
             st.session_state.provider = new_provider
             st.session_state.model = new_model
-            get_agent.clear()  # verwijder gecachede agent zodat nieuwe aangemaakt wordt
+            get_agent.clear()
+            get_orchestrator.clear()
             st.success(f"✅ Model opgeslagen: `{new_provider} / {new_model}`")
             st.rerun()
+
+        with st.expander("✏️ Beschikbare modellen bewerken"):
+            st.caption("Pas de modellijsten aan. Één modelnaam per regel.")
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                st.markdown("**Gemini**")
+                gemini_text = st.text_area(
+                    "Gemini-modellen",
+                    value="\n".join(get_gemini_models()),
+                    height=120,
+                    key="settings_gemini_models",
+                    label_visibility="collapsed",
+                )
+            with col_m2:
+                st.markdown("**Ollama**")
+                ollama_text = st.text_area(
+                    "Ollama-modellen",
+                    value="\n".join(get_ollama_models()),
+                    height=120,
+                    key="settings_ollama_models",
+                    label_visibility="collapsed",
+                )
+            col_ms1, col_ms2 = st.columns(2)
+            with col_ms1:
+                if st.button("💾 Gemini opslaan", key="save_gemini_models"):
+                    new_gemini = [m.strip() for m in gemini_text.splitlines() if m.strip()]
+                    set_gemini_models(new_gemini)
+                    st.success(f"✅ {len(new_gemini)} Gemini-modellen opgeslagen")
+                    st.rerun()
+            with col_ms2:
+                if st.button("💾 Ollama opslaan", key="save_ollama_models"):
+                    new_ollama = [m.strip() for m in ollama_text.splitlines() if m.strip()]
+                    set_ollama_models(new_ollama)
+                    st.success(f"✅ {len(new_ollama)} Ollama-modellen opgeslagen")
+                    st.rerun()
+            col_mr1, col_mr2 = st.columns(2)
+            with col_mr1:
+                if st.button("↩️ Gemini standaard", key="reset_gemini_models"):
+                    set_gemini_models([m.strip() for m in _DEFAULT_GEMINI_MODELS.split(",")])
+                    st.success("✅ Gemini-modellen hersteld")
+                    st.rerun()
+            with col_mr2:
+                if st.button("↩️ Ollama standaard", key="reset_ollama_models"):
+                    set_ollama_models([m.strip() for m in _DEFAULT_OLLAMA_MODELS.split(",")])
+                    st.success("✅ Ollama-modellen hersteld")
+                    st.rerun()
 
         st.markdown("---")
 
@@ -695,7 +1401,60 @@ def start_gui():
 
         st.markdown("---")
 
-        # 4. Destructieve shell-patronen
+        # 4. Gebruikers-avatar
+        st.markdown("### 🙂 Gebruikers-avatar")
+        st.caption("Kies een emoji die als avatar in de chat verschijnt.")
+        _AVATAR_OPTIONS = ["🧑", "👤", "🙋", "😊", "🧑‍💻", "🧔", "👩", "🧑‍🎤", "🤓", "😎", "🦊", "🐱", "🐶", "🤖", "👾"]
+        current_avatar = get_user_avatar()
+        if current_avatar not in _AVATAR_OPTIONS:
+            _AVATAR_OPTIONS.insert(0, current_avatar)
+        new_avatar = st.selectbox(
+            "Avatar emoji",
+            _AVATAR_OPTIONS,
+            index=_AVATAR_OPTIONS.index(current_avatar),
+            key="settings_avatar",
+            format_func=lambda e: f"{e}  ({e})",
+        )
+        if st.button("💾 Avatar opslaan", key="save_avatar"):
+            set_user_avatar(new_avatar)
+            st.success(f"✅ Avatar opgeslagen: {new_avatar}")
+            st.rerun()
+
+        st.markdown("---")
+
+        # 5. Chat-agentnaam
+        st.markdown("### 🤖 Naam van de chat-agent")
+        st.caption(
+            "De agent wordt in de chat aangesproken met deze naam. "
+            "De tool zelf heet altijd **Regian OS** — alleen de chat-persona verandert."
+        )
+        current_agent_name = get_agent_name()
+        new_agent_name = st.text_input(
+            "Agentnaam",
+            value=current_agent_name,
+            max_chars=30,
+            key="settings_agent_name",
+        )
+        col_an1, col_an2 = st.columns([1, 1])
+        with col_an1:
+            if st.button("💾 Naam opslaan", key="save_agent_name"):
+                _clean = new_agent_name.strip()
+                if _clean:
+                    set_agent_name(_clean)
+                    st.success(f"✅ Agentnaam opgeslagen: **{_clean}**")
+                    st.rerun()
+                else:
+                    st.error("Agentnaam mag niet leeg zijn.")
+        with col_an2:
+            if st.button("↩️ Standaard (Reggy)", key="reset_agent_name"):
+                from regian.settings import _DEFAULT_AGENT_NAME
+                set_agent_name(_DEFAULT_AGENT_NAME)
+                st.success(f"✅ Agentnaam hersteld naar **{_DEFAULT_AGENT_NAME}**")
+                st.rerun()
+
+        st.markdown("---")
+
+        # 6. Destructieve shell-patronen
         st.markdown("### ⚠️ Destructieve shell-patronen")
         st.caption(
             "Regex-patronen die HITL triggeren bij `run_shell`. Één patroon per regel. "
@@ -719,6 +1478,107 @@ def start_gui():
                 from regian.settings import _DEFAULT_DANGEROUS_PATTERNS
                 set_dangerous_patterns(list(_DEFAULT_DANGEROUS_PATTERNS))
                 st.success("✅ Standaard-patronen hersteld.")
+                st.rerun()
+
+        st.markdown("---")
+
+        # 7. Shell timeout
+        st.markdown("### ⏱️ Shell Timeout")
+        st.caption("`run_shell` en cron-shelltaken worden na deze tijd afgebroken (seconden).")
+        current_timeout = get_shell_timeout()
+        new_timeout = st.number_input(
+            "Timeout (seconden)",
+            min_value=5,
+            max_value=600,
+            value=current_timeout,
+            step=5,
+            key="settings_timeout",
+        )
+        if st.button("💾 Timeout opslaan", key="save_timeout"):
+            set_shell_timeout(int(new_timeout))
+            st.success(f"✅ Shell timeout opgeslagen: {int(new_timeout)}s")
+
+        st.markdown("---")
+
+        # 8. Agent iteraties
+        st.markdown("### 🔁 Agent max. iteraties")
+        st.caption("Maximale ReAct-lussen voordat de agent opgeeft (standaard: 5).")
+        current_max_iter = get_agent_max_iterations()
+        new_max_iter = st.number_input(
+            "Max. iteraties",
+            min_value=1,
+            max_value=20,
+            value=current_max_iter,
+            step=1,
+            key="settings_max_iter",
+        )
+        if st.button("💾 Iteraties opslaan", key="save_max_iter"):
+            set_agent_max_iterations(int(new_max_iter))
+            st.success(f"✅ Agent max. iteraties opgeslagen: {int(new_max_iter)}")
+
+        st.markdown("---")
+
+        # 9. Log instellingen
+        st.markdown("### 📋 Log instellingen")
+        st.caption("Bepaal hoeveel log-entries bewaard worden en hoeveel tekens per resultaat.")
+        col_log1, col_log2 = st.columns(2)
+        with col_log1:
+            current_max_entries = get_log_max_entries()
+            new_max_entries = st.number_input(
+                "Max. log-entries",
+                min_value=50,
+                max_value=10000,
+                value=current_max_entries,
+                step=50,
+                key="settings_log_entries",
+            )
+        with col_log2:
+            current_max_chars = get_log_result_max_chars()
+            new_max_chars = st.number_input(
+                "Max. tekens per resultaat",
+                min_value=50,
+                max_value=5000,
+                value=current_max_chars,
+                step=50,
+                key="settings_log_chars",
+            )
+        if st.button("💾 Log instellingen opslaan", key="save_log_settings"):
+            set_log_max_entries(int(new_max_entries))
+            set_log_result_max_chars(int(new_max_chars))
+            st.success(f"✅ Opgeslagen: max {int(new_max_entries)} entries, {int(new_max_chars)} tekens/resultaat")
+
+        st.markdown("---")
+
+        # 10. Bestandsnamen
+        st.markdown("### 🗂️ Bestandsnamen")
+        st.caption("Pas de namen aan van het actie-logbestand en het jobs-bestand.")
+        col_fn1, col_fn2 = st.columns(2)
+        with col_fn1:
+            current_log_file = get_log_file_name()
+            new_log_file = st.text_input(
+                "Actie-logbestand",
+                value=current_log_file,
+                key="settings_log_file_name",
+            )
+        with col_fn2:
+            current_jobs_file = get_jobs_file_name()
+            new_jobs_file = st.text_input(
+                "Jobs-bestand",
+                value=current_jobs_file,
+                key="settings_jobs_file_name",
+            )
+        col_fn_btn1, col_fn_btn2 = st.columns(2)
+        with col_fn_btn1:
+            if st.button("💾 Bestandsnamen opslaan", key="save_file_names"):
+                set_log_file_name(new_log_file.strip())
+                set_jobs_file_name(new_jobs_file.strip())
+                st.success(f"✅ Opgeslagen: log='{new_log_file.strip()}', jobs='{new_jobs_file.strip()}'")
+        with col_fn_btn2:
+            if st.button("🔄 Reset bestandsnamen", key="reset_file_names"):
+                from regian.settings import _DEFAULT_LOG_FILE_NAME, _DEFAULT_JOBS_FILE_NAME
+                set_log_file_name(_DEFAULT_LOG_FILE_NAME)
+                set_jobs_file_name(_DEFAULT_JOBS_FILE_NAME)
+                st.success(f"✅ Bestandsnamen gereset naar standaard.")
                 st.rerun()
 
 

@@ -54,7 +54,7 @@ def set_confirm_required(tools: set[str]):
 import json as _json
 
 _DEFAULT_DANGEROUS_PATTERNS: list[str] = [
-    r"\brm\b.*-[a-z]*[rf]",
+    r"\brm\b",
     r"\bsudo\b",
     r"\bmkfs\b",
     r"\bdd\b.+of=/dev/",
@@ -91,3 +91,167 @@ def set_dangerous_patterns(patterns: list[str]):
     value = _json.dumps(patterns)
     set_key(str(ENV_FILE), "DANGEROUS_PATTERNS", value)
     os.environ["DANGEROUS_PATTERNS"] = value
+
+
+# ── User Avatar Settings ───────────────────────────────────────
+
+_DEFAULT_USER_AVATAR = "🧑"
+
+def get_user_avatar() -> str:
+    """Geeft het geconfigureerde gebruikers-emoji avatar terug."""
+    return os.getenv("USER_AVATAR", _DEFAULT_USER_AVATAR)
+
+def set_user_avatar(emoji: str):
+    """Sla het gebruikers-emoji avatar op in .env."""
+    set_key(str(ENV_FILE), "USER_AVATAR", emoji)
+    os.environ["USER_AVATAR"] = emoji
+
+
+# ── Agent Name Settings ────────────────────────────────────────
+
+_DEFAULT_AGENT_NAME = "Reggy"
+
+def get_agent_name() -> str:
+    """Geeft de aangepaste naam van de chat-agent (standaard: Reggy)."""
+    return os.getenv("AGENT_NAME", _DEFAULT_AGENT_NAME).strip() or _DEFAULT_AGENT_NAME
+
+def set_agent_name(name: str):
+    """Sla de naam van de chat-agent op in .env."""
+    name = name.strip() or _DEFAULT_AGENT_NAME
+    set_key(str(ENV_FILE), "AGENT_NAME", name)
+    os.environ["AGENT_NAME"] = name
+
+
+# ── Agent Max Iterations Settings ───────────────────────────────
+
+_DEFAULT_AGENT_MAX_ITERATIONS = 5
+
+def get_agent_max_iterations() -> int:
+    """Geeft het maximale aantal ReAct-iteraties van de agent (standaard: 5)."""
+    try:
+        return int(os.getenv("AGENT_MAX_ITERATIONS", str(_DEFAULT_AGENT_MAX_ITERATIONS)))
+    except (ValueError, TypeError):
+        return _DEFAULT_AGENT_MAX_ITERATIONS
+
+def set_agent_max_iterations(n: int):
+    """Sla het maximale aantal agent-iteraties op in .env."""
+    set_key(str(ENV_FILE), "AGENT_MAX_ITERATIONS", str(int(n)))
+    os.environ["AGENT_MAX_ITERATIONS"] = str(int(n))
+
+
+# ── LLM Model Lists ────────────────────────────────────────────
+
+_DEFAULT_GEMINI_MODELS = "gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-flash-latest"
+_DEFAULT_OLLAMA_MODELS = "mistral,llama3.1:8b,llama3.2,deepseek-r1:8b"
+
+def get_gemini_models() -> list[str]:
+    """Geeft de lijst van beschikbare Gemini-modellen (komma-separated in .env)."""
+    raw = os.getenv("GEMINI_MODELS", _DEFAULT_GEMINI_MODELS)
+    return [m.strip() for m in raw.split(",") if m.strip()]
+
+def set_gemini_models(models: list[str]):
+    """Sla de lijst van Gemini-modellen op in .env."""
+    value = ",".join(m.strip() for m in models if m.strip())
+    set_key(str(ENV_FILE), "GEMINI_MODELS", value)
+    os.environ["GEMINI_MODELS"] = value
+
+def get_ollama_models() -> list[str]:
+    """Geeft de lijst van beschikbare Ollama-modellen (komma-separated in .env)."""
+    raw = os.getenv("OLLAMA_MODELS", _DEFAULT_OLLAMA_MODELS)
+    return [m.strip() for m in raw.split(",") if m.strip()]
+
+def set_ollama_models(models: list[str]):
+    """Sla de lijst van Ollama-modellen op in .env."""
+    value = ",".join(m.strip() for m in models if m.strip())
+    set_key(str(ENV_FILE), "OLLAMA_MODELS", value)
+    os.environ["OLLAMA_MODELS"] = value
+
+
+# ── Shell Timeout Settings ───────────────────────────────────────
+
+_DEFAULT_SHELL_TIMEOUT = 30
+
+def get_shell_timeout() -> int:
+    """Geeft de shell-timeout in seconden (standaard: 30)."""
+    try:
+        return int(os.getenv("SHELL_TIMEOUT", str(_DEFAULT_SHELL_TIMEOUT)))
+    except (ValueError, TypeError):
+        return _DEFAULT_SHELL_TIMEOUT
+
+def set_shell_timeout(seconds: int):
+    """Sla de shell-timeout (in seconden) op in .env."""
+    set_key(str(ENV_FILE), "SHELL_TIMEOUT", str(int(seconds)))
+    os.environ["SHELL_TIMEOUT"] = str(int(seconds))
+
+
+# ── Log Settings ───────────────────────────────────────────────
+
+_DEFAULT_LOG_MAX_ENTRIES = 500
+_DEFAULT_LOG_RESULT_MAX_CHARS = 300
+
+def get_log_max_entries() -> int:
+    """Geeft het maximale aantal log-entries dat bewaard wordt (standaard: 500)."""
+    try:
+        return int(os.getenv("LOG_MAX_ENTRIES", str(_DEFAULT_LOG_MAX_ENTRIES)))
+    except (ValueError, TypeError):
+        return _DEFAULT_LOG_MAX_ENTRIES
+
+def set_log_max_entries(n: int):
+    """Sla het maximale aantal log-entries op in .env."""
+    set_key(str(ENV_FILE), "LOG_MAX_ENTRIES", str(int(n)))
+    os.environ["LOG_MAX_ENTRIES"] = str(int(n))
+
+def get_log_result_max_chars() -> int:
+    """Geeft het maximale aantal tekens per log-resultaat (standaard: 300)."""
+    try:
+        return int(os.getenv("LOG_RESULT_MAX_CHARS", str(_DEFAULT_LOG_RESULT_MAX_CHARS)))
+    except (ValueError, TypeError):
+        return _DEFAULT_LOG_RESULT_MAX_CHARS
+
+def set_log_result_max_chars(n: int):
+    """Sla het maximale aantal tekens per log-resultaat op in .env."""
+    set_key(str(ENV_FILE), "LOG_RESULT_MAX_CHARS", str(int(n)))
+    os.environ["LOG_RESULT_MAX_CHARS"] = str(int(n))
+
+
+# ── Log/Jobs File Name Settings ────────────────────────────────
+
+_DEFAULT_LOG_FILE_NAME = "regian_action_log.jsonl"
+_DEFAULT_JOBS_FILE_NAME = "regian_jobs.json"
+
+def get_log_file_name() -> str:
+    """Geeft de bestandsnaam van het actie-logbestand (standaard: regian_action_log.jsonl)."""
+    return os.getenv("LOG_FILE_NAME", _DEFAULT_LOG_FILE_NAME).strip() or _DEFAULT_LOG_FILE_NAME
+
+def set_log_file_name(name: str):
+    """Sla de bestandsnaam van het actie-logbestand op in .env."""
+    name = name.strip() or _DEFAULT_LOG_FILE_NAME
+    set_key(str(ENV_FILE), "LOG_FILE_NAME", name)
+    os.environ["LOG_FILE_NAME"] = name
+
+def get_jobs_file_name() -> str:
+    """Geeft de bestandsnaam van het jobs-bestand (standaard: regian_jobs.json)."""
+    return os.getenv("JOBS_FILE_NAME", _DEFAULT_JOBS_FILE_NAME).strip() or _DEFAULT_JOBS_FILE_NAME
+
+def set_jobs_file_name(name: str):
+    """Sla de bestandsnaam van het jobs-bestand op in .env."""
+    name = name.strip() or _DEFAULT_JOBS_FILE_NAME
+    set_key(str(ENV_FILE), "JOBS_FILE_NAME", name)
+    os.environ["JOBS_FILE_NAME"] = name
+
+
+# ── Active Project Settings ────────────────────────────────────
+
+def get_active_project() -> str:
+    """Geeft de naam van het actieve project, of een lege string indien geen actief project."""
+    return os.getenv("ACTIVE_PROJECT", "")
+
+def set_active_project(name: str):
+    """Sla het actieve project op in .env en de huidige omgeving."""
+    set_key(str(ENV_FILE), "ACTIVE_PROJECT", name)
+    os.environ["ACTIVE_PROJECT"] = name
+
+def clear_active_project():
+    """Verwijder het actieve project (geen actief project meer)."""
+    set_key(str(ENV_FILE), "ACTIVE_PROJECT", "")
+    os.environ["ACTIVE_PROJECT"] = ""

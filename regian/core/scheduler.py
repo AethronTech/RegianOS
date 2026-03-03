@@ -18,10 +18,19 @@ from typing import Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from regian.core.action_log import log_action
 
 logger = logging.getLogger(__name__)
 
-_JOBS_FILE = Path(__file__).parent.parent.parent / "regian_jobs.json"
+
+def _get_jobs_file() -> Path:
+    try:
+        from regian.settings import get_jobs_file_name
+        return Path(__file__).parent.parent.parent / get_jobs_file_name()
+    except Exception:
+        return Path(__file__).parent.parent.parent / "regian_jobs.json"
+
+
 _scheduler: Optional[BackgroundScheduler] = None
 _lock = threading.Lock()
 
@@ -29,16 +38,16 @@ _lock = threading.Lock()
 # ── Opslag ─────────────────────────────────────────────────────────────────────
 
 def _load_jobs() -> dict:
-    if _JOBS_FILE.exists():
+    if _get_jobs_file().exists():
         try:
-            return json.loads(_JOBS_FILE.read_text(encoding="utf-8"))
+            return json.loads(_get_jobs_file().read_text(encoding="utf-8"))
         except Exception:
             pass
     return {}
 
 
 def _save_jobs(jobs: dict):
-    _JOBS_FILE.write_text(json.dumps(jobs, indent=2, ensure_ascii=False), encoding="utf-8")
+    _get_jobs_file().write_text(json.dumps(jobs, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 # ── Schedule parser ────────────────────────────────────────────────────────────
@@ -156,8 +165,9 @@ def _execute_job(job_id: str):
 
     try:
         if job_type == "shell":
+            from regian.settings import get_shell_timeout
             result = subprocess.run(
-                task, shell=True, capture_output=True, text=True, timeout=60,
+                task, shell=True, capture_output=True, text=True, timeout=get_shell_timeout(),
                 cwd=str(Path(__file__).parent.parent.parent),
             )
             output = result.stdout.strip() or result.stderr.strip() or "OK"
@@ -184,9 +194,11 @@ def _execute_job(job_id: str):
     if job_id in jobs:
         jobs[job_id]["last_run"] = datetime.now().isoformat(timespec="seconds")
         jobs[job_id]["last_status"] = status
-        jobs[job_id]["last_output"] = output[:500]
+        from regian.settings import get_log_result_max_chars
+        jobs[job_id]["last_output"] = output[:get_log_result_max_chars()]
         _save_jobs(jobs)
 
+    log_action(f"cron:{job_type}", {"job_id": job_id, "task": task}, output, source="cron")
     logger.info(f"[Cron] {status} {job_id}: {output[:100]}")
 
 

@@ -48,6 +48,23 @@ def is_destructive_shell_command(command: str) -> bool:
     return any(re.search(pat, lower) for pat in get_dangerous_patterns())
 
 
+_DESTRUCTIVE_PYTHON_PATTERNS = [
+    r"open\s*\(.*['\"](?:w|a|x|wb|ab|xb)['\"]",  # bestand schrijven/aanmaken
+    r"\.write(?:_text|_bytes)?\s*\(",              # .write() / .write_text() / .write_bytes()
+    r"\bos\.remove\s*\(",                          # os.remove
+    r"\bos\.unlink\s*\(",                          # os.unlink
+    r"\bos\.rmdir\s*\(",                           # os.rmdir
+    r"\bshutil\.rmtree\s*\(",                      # shutil.rmtree
+    r"\.unlink\s*\(",                              # Path.unlink
+    r"\.rmdir\s*\(",                               # Path.rmdir
+]
+
+
+def is_destructive_python_code(code: str) -> bool:
+    """Geeft True als de Python-code destructieve schrijf- of verwijderoperaties bevat."""
+    return any(re.search(pat, code) for pat in _DESTRUCTIVE_PYTHON_PATTERNS)
+
+
 def run_shell(command: str, cwd: str = "") -> str:
     """
     Voert een shell-commando uit en geeft de output terug (stdout + stderr).
@@ -61,12 +78,14 @@ def run_shell(command: str, cwd: str = "") -> str:
     except ValueError as e:
         return str(e)
     try:
+        from regian.settings import get_shell_timeout
+        timeout = get_shell_timeout()
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
             cwd=str(work_dir),
         )
         output = result.stdout.strip()
@@ -75,7 +94,8 @@ def run_shell(command: str, cwd: str = "") -> str:
             return f"⚠️ Exit code {result.returncode}\n{errors or output}"
         return output or "✅ Commando uitgevoerd (geen output)"
     except subprocess.TimeoutExpired:
-        return "❌ Timeout: commando duurde langer dan 30 seconden."
+        from regian.settings import get_shell_timeout
+        return f"❌ Timeout: commando duurde langer dan {get_shell_timeout()} seconden."
     except Exception as e:
         return f"❌ Fout: {str(e)}"
 

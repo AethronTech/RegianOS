@@ -40,7 +40,36 @@ else
     echo "⚠️  Ollama niet gevonden. Installeer via https://ollama.com als je lokale modellen wil gebruiken."
 fi
 
-# 7. Tests uitvoeren
+# 7. Versienummer ophogen (patch +1)
+VERSION_FILE="regian/__init__.py"
+CURRENT=$(python3 -c "exec(open('$VERSION_FILE').read()); print(__version__)")
+NEW=$(python3 -c "p='$CURRENT'.split('.'); p[-1]=str(int(p[-1])+1); print('.'.join(p))")
+sed -i '' "s/__version__ = \"$CURRENT\"/__version__ = \"$NEW\"/" "$VERSION_FILE"
+# Versienummer ook in documentatie bijwerken
+for doc in docs/handleiding.md docs/functionele_beschrijving.md docs/technische_beschrijving.md; do
+    sed -i '' "s/$CURRENT/$NEW/g" "$doc"
+done
+echo "🔖 Versie: $CURRENT → $NEW (code + docs bijgewerkt)"
+
+# 8. Syntaxcontrole
+echo ""
+echo "🔍 Syntaxcontrole Python-bestanden..."
+SYNTAX_ERRORS=0
+while IFS= read -r -d '' pyfile; do
+    if ! python3 -m py_compile "$pyfile" 2>/dev/null; then
+        echo "❌ Syntaxfout in $pyfile"
+        python3 -m py_compile "$pyfile"
+        SYNTAX_ERRORS=$((SYNTAX_ERRORS + 1))
+    fi
+done < <(find regian tests -name '*.py' -print0)
+if [ $SYNTAX_ERRORS -eq 0 ]; then
+    echo "✅ Geen syntaxfouten gevonden"
+else
+    echo "❌ $SYNTAX_ERRORS bestand(en) met syntaxfouten. Build gestopt."
+    exit 1
+fi
+
+# 9. Tests uitvoeren
 if [[ "$*" != *"--skip-tests"* ]]; then
     echo ""
     echo "🧪 Tests uitvoeren..."

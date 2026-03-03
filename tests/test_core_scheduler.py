@@ -128,14 +128,14 @@ class TestParseScheduleErrors:
 class TestJobPersistence:
     def test_load_returns_empty_dict_when_no_file(self, tmp_path, monkeypatch):
         import regian.core.scheduler as sched
-        monkeypatch.setattr(sched, "_JOBS_FILE", tmp_path / "nonexistent.json")
+        monkeypatch.setattr(sched, "_get_jobs_file", lambda: tmp_path / "nonexistent.json")
         result = sched._load_jobs()
         assert result == {}
 
     def test_save_and_load_roundtrip(self, tmp_path, monkeypatch):
         import regian.core.scheduler as sched
         jobs_file = tmp_path / "jobs.json"
-        monkeypatch.setattr(sched, "_JOBS_FILE", jobs_file)
+        monkeypatch.setattr(sched, "_get_jobs_file", lambda: jobs_file)
         jobs = {"job1": {"type": "shell", "task": "echo hi", "enabled": True}}
         sched._save_jobs(jobs)
         loaded = sched._load_jobs()
@@ -145,6 +145,122 @@ class TestJobPersistence:
         import regian.core.scheduler as sched
         jobs_file = tmp_path / "corrupt.json"
         jobs_file.write_text("{ niet geldig json !!!", encoding="utf-8")
-        monkeypatch.setattr(sched, "_JOBS_FILE", jobs_file)
+        monkeypatch.setattr(sched, "_get_jobs_file", lambda: jobs_file)
         result = sched._load_jobs()
         assert result == {}
+
+
+# ── add / remove / toggle / get_all_jobs ─────────────────────────────────────
+
+@pytest.fixture
+def isolated_scheduler(tmp_path, monkeypatch):
+    """Patcht _get_jobs_file en get_scheduler, zodat geen echte scheduler start."""
+    from unittest.mock import MagicMock
+    import regian.core.scheduler as sched
+
+    jobs_file = tmp_path / "jobs.json"
+    monkeypatch.setattr(sched, "_get_jobs_file", lambda: jobs_file)
+
+    mock_scheduler = MagicMock()
+    monkeypatch.setattr(sched, "get_scheduler", lambda: mock_scheduler)
+    return sched, mock_scheduler
+
+
+class TestAddScheduledJob:
+    def test_adds_job_to_persistence(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        result = sched.add_scheduled_job("job1", "echo hi", "shell", "elke 1 minuut", "test")
+        assert result == "job1"
+        jobs = sched._load_jobs()
+        assert "job1" in jobs
+        assert jobs["job1"]["task"] == "echo hi"
+
+    def test_job_enabled_by_default(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        sched.add_scheduled_job("job2", "ls", "shell", "elke 5 minuten")
+        jobs = sched._load_jobs()
+        assert jobs["job2"]["enabled"] is True
+
+    def test_invalid_schedule_returns_error(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        result = sched.add_scheduled_job("job_bad", "echo", "shell", "dit is geen schema")
+        assert "❌" in result
+        jobs = sched._load_jobs()
+        assert "job_bad" not in jobs
+
+    def test_shell_job_added_to_scheduler(self, isolated_scheduler):
+        sched, mock_sched = isolated_scheduler
+        sched.add_scheduled_job("job3", "echo ok", "shell", "elke 1 minuut")
+        mock_sched.add_job.assert_called_once()
+
+
+class TestRemoveScheduledJob:
+    def test_removes_existing_job(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        sched.add_scheduled_job("job_rm", "echo", "shell", "elke 1 minuut")
+        result = sched.remove_scheduled_job("job_rm")
+        assert result is True
+        assert "job_rm" not in sched._load_jobs()
+
+    def test_returns_false_for_nonexistent(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        result = sched.remove_scheduled_job("bestaat_niet")
+        assert result is False
+
+
+class TestToggleScheduledJob:
+    def test_disable_job(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        sched.add_scheduled_job("job_tog", "echo", "shell", "elke 1 minuut")
+        result = sched.toggle_scheduled_job("job_tog", False)
+        assert result is True
+        jobs = sched._load_jobs()
+        assert jobs["job_tog"]["enabled"] is False
+
+    def test_enable_job(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        sched.add_scheduled_job("job_en", "echo", "shell", "elke 1 minuut")
+        sched.toggle_scheduled_job("job_en", False)
+        result = sched.toggle_scheduled_job("job_en", True)
+        assert result is True
+        jobs = sched._load_jobs()
+        assert jobs["job_en"]["enabled"] is True
+
+    def test_returns_false_for_nonexistent(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        result = sched.toggle_scheduled_job("bestaat_niet", True)
+        assert result is False
+
+
+class TestGetAllJobs:
+    def test_returns_empty_when_no_file(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        jobs = sched.get_all_jobs()
+        assert jobs == {}
+
+    def test_returns_all_saved_jobs(self, isolated_scheduler):
+        sched, _ = isolated_scheduler
+        sched.add_scheduled_job("j1", "echo a", "shell", "elke 1 minuut")
+        sched.add_scheduled_job("j2", "echo b", "shell", "elke 2 minuten")
+        all_jobs = sched.get_all_jobs()
+        assert "j1" in all_jobs
+        assert "j2" in all_jobs
+
+
+class TestGetNextRun:
+    def test_returns_none_when_job_not_in_scheduler(self, isolated_scheduler):
+        sched, mock_sched = isolated_scheduler
+        mock_sched.get_job.return_value = None
+        result = sched.get_next_run("onbekend")
+        assert result is None
+
+    def test_returns_formatted_time_when_scheduled(self, isolated_scheduler):
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone
+        sched, mock_sched = isolated_scheduler
+        mock_job = MagicMock()
+        mock_job.next_run_time = datetime(2026, 3, 1, 9, 0, 0, tzinfo=timezone.utc)
+        mock_sched.get_job.return_value = mock_job
+        result = sched.get_next_run("job_x")
+        assert "01/03/2026" in result
+        assert "09:00:00" in result
