@@ -2015,10 +2015,17 @@ def start_gui():
 
                         _wf_art_keys = [k for k in _wfr.artifacts if k != "input"]
                         if _wf_art_keys:
-                            with st.expander("📦 Artifacts"):
-                                for _wfk in _wf_art_keys:
-                                    st.markdown(f"**{_wfk}:**")
-                                    st.markdown(str(_wfr.artifacts[_wfk])[:1000])
+                            st.markdown("**📦 Artifacts**")
+                            for _wfk in _wf_art_keys:
+                                _wf_art_val = str(_wfr.artifacts[_wfk])
+                                _wf_art_lines = len(_wf_art_val.splitlines())
+                                _wf_art_preview = _wf_art_val[:60].replace("\n", " ").strip()
+                                _wf_art_label = (
+                                    f"📄 **{_wfk}** · {_wf_art_lines} regels"
+                                    f" · _{_wf_art_preview}…_"
+                                )
+                                with st.expander(_wf_art_label, expanded=False):
+                                    st.markdown(_wf_art_val)
 
                         if _wfr.status == STATUS_WAITING:
                             st.markdown("---")
