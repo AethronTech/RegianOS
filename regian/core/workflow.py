@@ -364,7 +364,155 @@ def cancel_run(run_id: str, project_path: str = "") -> WorkflowRun:
     return run
 
 
-# ── Interne helpers ───────────────────────────────────────────────────────────
+def create_run(name: str, user_input: str, project_path: str = "") -> WorkflowRun:
+    """
+    Maakt een nieuwe workflow-run aan zonder fasen uit te voeren.
+    Gebruik advance_one_phase() om fase-voor-fase te starten.
+    """
+    template = load_workflow(name, project_path)
+    now = datetime.now().isoformat(timespec="seconds")
+    run = WorkflowRun(
+        run_id=str(uuid.uuid4())[:8],
+        workflow_id=template.get("id", name),
+        workflow_name=template.get("name", name),
+        started_at=now,
+        updated_at=now,
+        status=STATUS_RUNNING,
+        current_phase_index=0,
+        artifacts={"input": user_input},
+        phase_log=[],
+        input=user_input,
+        project_path=project_path,
+    )
+    save_run(run)
+    return run
+
+
+def advance_one_phase(run_id: str, project_path: str = "") -> WorkflowRun:
+    """
+    Voert precies één fase uit en geeft de bijgewerkte run terug.
+    Bij needs_approval zet de run naar WAITING.
+    Bij afloop van alle fasen zet de run naar DONE.
+    """
+    run = load_run(run_id, project_path)
+    if run.status != STATUS_RUNNING:
+        return run
+    template = load_workflow(run.workflow_id, project_path)
+    phases = template.get("phases", [])
+
+    if run.current_phase_index >= len(phases):
+        run.status = STATUS_DONE
+        run.updated_at = datetime.now().isoformat(timespec="seconds")
+        save_run(run)
+        return run
+
+    phase = phases[run.current_phase_index]
+    phase_id = phase.get("id", str(run.current_phase_index))
+
+    try:
+        output, needs_approval = execute_phase(run, phase)
+    except Exception as exc:
+        run.status = STATUS_ERROR
+        run.phase_log.append({
+            "phase_id": phase_id,
+            "phase_name": phase.get("name", phase_id),
+            "status": "error",
+            "output": str(exc),
+            "ts": datetime.now().isoformat(timespec="seconds"),
+        })
+        run.updated_at = datetime.now().isoformat(timespec="seconds")
+        save_run(run)
+        return run
+
+    output_key = phase.get("output_key")
+    if output_key:
+        run.artifacts[output_key] = output
+
+    run.phase_log.append({
+        "phase_id": phase_id,
+        "phase_name": phase.get("name", phase_id),
+        "status": "waiting" if needs_approval else "done",
+        "output": output,
+        "ts": datetime.now().isoformat(timespec="seconds"),
+    })
+    run.updated_at = datetime.now().isoformat(timespec="seconds")
+
+    if needs_approval:
+        run.status = STATUS_WAITING
+        save_run(run)
+        return run
+
+    run.current_phase_index += 1
+    if run.current_phase_index >= len(phases):
+        run.status = STATUS_DONE
+    save_run(run)
+    return run
+
+
+def revise_run(run_id: str, feedback: str, project_path: str = "") -> WorkflowRun:
+    """
+    Hervoert de huidige wachtende fase met gebruikersfeedback.
+    De vorige uitvoer + feedback worden als context aan het LLM meegegeven.
+    De run blijft in WAITING-status zodat de gebruiker opnieuw kan goedkeuren.
+    """
+    run = load_run(run_id, project_path)
+    if run.status != STATUS_WAITING:
+        raise ValueError(f"Run '{run_id}' staat niet op 'waiting' (huidig: {run.status}).")
+
+    phases = _get_phases(run)
+    phase = phases[run.current_phase_index]
+    phase_id = phase.get("id", str(run.current_phase_index))
+
+    # Vorige uitvoer ophalen uit phase_log
+    prev_output = ""
+    for entry in reversed(run.phase_log):
+        if entry.get("phase_id") == phase_id:
+            prev_output = entry.get("output", "")
+            break
+
+    # Bouw aangepaste fase: inject feedback + vorige uitvoer in het prompt
+    revised_phase = dict(phase)
+    if phase.get("type") == "llm_prompt" and phase.get("prompt_template"):
+        revised_phase["prompt_template"] = (
+            phase["prompt_template"]
+            + "\n\n---\n## Vorige uitvoer (ter referentie):\n"
+            + prev_output
+            + "\n\n## Bijsturing van de gebruiker:\n"
+            + feedback
+            + "\n\nVerwerk de bijsturing volledig in een herziene versie van het document."
+        )
+    elif phase.get("type") == "human_checkpoint":
+        revised_phase = dict(phase)
+        run.artifacts["feedback_revision"] = feedback
+
+    try:
+        output, _ = execute_phase(run, revised_phase)
+    except Exception as exc:
+        raise RuntimeError(f"Heruitvoering mislukt: {exc}") from exc
+
+    output_key = phase.get("output_key")
+    if output_key:
+        run.artifacts[output_key] = output
+
+    new_entry = {
+        "phase_id": phase_id,
+        "phase_name": phase.get("name", phase_id),
+        "status": "waiting",
+        "output": output,
+        "ts": datetime.now().isoformat(timespec="seconds"),
+        "revised": True,
+        "feedback": feedback,
+    }
+    if run.phase_log and run.phase_log[-1].get("phase_id") == phase_id:
+        run.phase_log[-1] = new_entry
+    else:
+        run.phase_log.append(new_entry)
+
+    run.status = STATUS_WAITING
+    run.updated_at = datetime.now().isoformat(timespec="seconds")
+    save_run(run)
+    return run
+
 
 def _get_phases(run: WorkflowRun) -> list[dict]:
     """Laad de fasen van de workflow die bij deze run hoort."""

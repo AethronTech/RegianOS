@@ -1830,6 +1830,10 @@ def start_gui():
             advance_run as _wf_advance,
             cancel_run as _wf_cancel,
             start_workflow as _wf_start,
+            create_run as _wf_create,
+            advance_one_phase as _wf_advance_one,
+            revise_run as _wf_revise,
+            load_run as _wf_load_run,
             _get_phases,
             STATUS_WAITING, STATUS_DONE, STATUS_ERROR, STATUS_RUNNING,
         )
@@ -1911,7 +1915,13 @@ def start_gui():
 
                         if _wfr.phase_log:
                             st.markdown("**Laatste uitvoer:**")
-                            st.markdown(_wfr.phase_log[-1].get("output", "")[:3000])
+                            _wf_last_entry = _wfr.phase_log[-1]
+                            if _wf_last_entry.get("revised"):
+                                st.caption(
+                                    f"🔄 *Herzien op basis van feedback:* "
+                                    f"`{_wf_last_entry.get('feedback', '')[:80]}`"
+                                )
+                            st.markdown(_wf_last_entry.get("output", "")[:3000])
 
                         _wf_art_keys = [k for k in _wfr.artifacts if k != "input"]
                         if _wf_art_keys:
@@ -1928,17 +1938,34 @@ def start_gui():
                                 placeholder="Bijsturing voor de volgende fase...",
                                 height=80,
                             )
-                            _wfc1, _wfc2 = st.columns(2)
+                            _wfc1, _wfc2, _wfc3 = st.columns(3)
                             with _wfc1:
                                 if st.button("✅ Goedkeuren & doorgaan",
                                              key=f"wf_approve_{_wfr.run_id}", type="primary"):
                                     with st.spinner("Volgende fase uitvoeren..."):
                                         try:
                                             _wf_advance(_wfr.run_id, _wf_feedback, _wf_pp)
+                                            st.toast("✅ Fase goedgekeurd, volgende fase gestart.")
                                             st.rerun()
                                         except Exception as _wfe:
                                             st.error(f"❌ {_wfe}")
                             with _wfc2:
+                                if _wf_feedback.strip():
+                                    if st.button("🔄 Bijsturen & opnieuw genereren",
+                                                 key=f"wf_revise_{_wfr.run_id}"):
+                                        with st.spinner("🧠 Fase opnieuw uitvoeren met feedback..."):
+                                            try:
+                                                _wf_revise(_wfr.run_id, _wf_feedback.strip(), _wf_pp)
+                                                st.toast("🔄 Uitvoer bijgewerkt — bekijk het resultaat hierboven.")
+                                                st.rerun()
+                                            except Exception as _wfe:
+                                                st.error(f"❌ {_wfe}")
+                                else:
+                                    st.button("🔄 Bijsturen & opnieuw genereren",
+                                              key=f"wf_revise_{_wfr.run_id}",
+                                              disabled=True,
+                                              help="Voer eerst feedback in")
+                            with _wfc3:
                                 if st.button("❌ Annuleren", key=f"wf_cancel_{_wfr.run_id}"):
                                     _wf_cancel(_wfr.run_id, _wf_pp)
                                     st.rerun()
