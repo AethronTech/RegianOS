@@ -47,6 +47,69 @@ class TestListWorkflowRuns:
         assert "run_vis1" in result
 
 
+# ── start_workflow — auto-project aanmaken ─────────────────────────────────────
+
+class TestStartWorkflowAutoProject:
+    def test_auto_project_aangemaakt_als_geen_actief(self, tmp_path, monkeypatch):
+        """Als er geen actief project is, wordt er automatisch een aangemaakt."""
+        from regian.core import workflow as wf_mod
+        import regian.skills.workflow as skill_wf
+
+        sdir = tmp_path / ".regian_workflow_state"
+        monkeypatch.setattr(wf_mod, "_state_dir", lambda pp="": sdir)
+
+        # Simuleer: geen actief project
+        _call_count = {"n": 0}
+        def _mock_pp():
+            _call_count["n"] += 1
+            # Eerste aanroep: geen actief project; tweede: na activate → geef tmp_path terug
+            return "" if _call_count["n"] <= 1 else str(tmp_path)
+        monkeypatch.setattr(skill_wf, "_project_path", _mock_pp)
+
+        created = []
+        activated = []
+        monkeypatch.setattr("regian.skills.project.create_project",
+                            lambda name, **kw: created.append(name) or "✅")
+        monkeypatch.setattr("regian.skills.project.activate_project",
+                            lambda name: activated.append(name) or "✅")
+
+        # Template laden zonder LLM: checkpoint-template
+        tpl = {
+            "id": "chk", "name": "CWF", "description": "", "version": "1.0",
+            "phases": [{"id": "v", "type": "human_checkpoint", "prompt": "OK?"}],
+        }
+        monkeypatch.setattr(wf_mod, "load_workflow", lambda name, pp="": tpl)
+
+        result = skill_wf.start_workflow("chk", "mijn idee")
+
+        assert len(created) == 1, "create_project moet één keer aangeroepen zijn"
+        assert len(activated) == 1
+        assert "chk" in created[0]  # auto_name bevat de workflow-naam
+        assert "📁" in result        # auto-project melding in uitvoer
+
+    def test_geen_auto_project_als_al_actief(self, tmp_path, monkeypatch):
+        """Als er al een actief project is, wordt er géén nieuw aangemaakt."""
+        from regian.core import workflow as wf_mod
+        import regian.skills.workflow as skill_wf
+
+        sdir = tmp_path / ".regian_workflow_state"
+        monkeypatch.setattr(wf_mod, "_state_dir", lambda pp="": sdir)
+        monkeypatch.setattr(skill_wf, "_project_path", lambda: str(tmp_path))
+
+        created = []
+        monkeypatch.setattr("regian.skills.project.create_project",
+                            lambda name, **kw: created.append(name) or "✅")
+
+        tpl = {
+            "id": "chk2", "name": "CWF2", "description": "", "version": "1.0",
+            "phases": [{"id": "v", "type": "human_checkpoint", "prompt": "OK?"}],
+        }
+        monkeypatch.setattr(wf_mod, "load_workflow", lambda name, pp="": tpl)
+
+        skill_wf.start_workflow("chk2", "test")
+        assert len(created) == 0  # geen project aangemaakt
+
+
 # ── workflow_status ────────────────────────────────────────────────────────────
 
 class TestWorkflowStatus:

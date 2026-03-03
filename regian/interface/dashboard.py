@@ -3,6 +3,7 @@ import importlib
 import inspect
 import json
 import pkgutil
+import re
 from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as _components
@@ -1599,7 +1600,7 @@ def start_gui():
 
         wf_sub = st.radio(
             "Sectie",
-            ["▶️ Starten", "📋 Actieve runs", "📚 Templates"],
+            ["▶️ Starten", "📋 Actieve runs", "📚 Templates", "✏️ Visuele editor"],
             horizontal=True,
             label_visibility="collapsed",
             key="wf_sub",
@@ -1753,6 +1754,251 @@ def start_gui():
                     (st.success if "✅" in _wf_imp else st.error)(_wf_imp)
                     if "✅" in _wf_imp:
                         st.rerun()
+
+        # ── Sectie 4: Visuele editor ───────────────────────────
+        else:
+            st.markdown("### ✏️ Visuele workflow-editor")
+            import json as _wfjson
+
+            _WFED_TYPES  = ["llm_prompt", "task_loop", "human_checkpoint", "tool_chain"]
+            _WFED_ICONS  = {"llm_prompt": "🧠", "task_loop": "🔄",
+                            "human_checkpoint": "🔍", "tool_chain": "⚙️"}
+            _WFED_COLORS = {"llm_prompt": "lightblue", "task_loop": "lightgreen",
+                            "human_checkpoint": "lightyellow", "tool_chain": "lightgray"}
+
+            # Template kiezen
+            _wfed_all = _wf_list_templates(_wf_pp)
+            _wfed_opts = ["➕ Nieuw template"] + [w["id"] for w in _wfed_all]
+            _wfed_sel = st.selectbox("Template laden of nieuw beginnen",
+                                     _wfed_opts, key="wfed_sel")
+
+            # Laad bij keuzewijziging
+            if ("wf_editor_data" not in st.session_state
+                    or st.session_state.get("wf_editor_sel") != _wfed_sel):
+                st.session_state["wf_editor_sel"] = _wfed_sel
+                if _wfed_sel == "➕ Nieuw template":
+                    st.session_state["wf_editor_data"] = {
+                        "id": "nieuwe_workflow",
+                        "name": "Nieuwe Workflow",
+                        "description": "",
+                        "version": "1.0",
+                        "phases": [],
+                    }
+                else:
+                    try:
+                        from regian.core.workflow import load_workflow as _wf_lw
+                        _ld = _wf_lw(_wfed_sel, _wf_pp)
+                        import copy as _wfcopy
+                        st.session_state["wf_editor_data"] = _wfcopy.deepcopy(_ld)
+                    except Exception as _wflerr:
+                        st.error(f"❌ {_wflerr}")
+                        st.session_state["wf_editor_data"] = None
+
+            _wfed = st.session_state.get("wf_editor_data")
+            if _wfed is None:
+                st.stop()
+
+            # ── Metadata ──────────────────────────────────────
+            _wfem1, _wfem2 = st.columns(2)
+            with _wfem1:
+                _wfed["id"] = st.text_input("Template-ID", value=_wfed["id"], key="wfed_id")
+                _wfed["name"] = st.text_input("Naam", value=_wfed["name"], key="wfed_name")
+            with _wfem2:
+                _wfed["description"] = st.text_input(
+                    "Beschrijving", value=_wfed.get("description", ""), key="wfed_desc")
+                _wfed["version"] = st.text_input(
+                    "Versie", value=_wfed.get("version", "1.0"), key="wfed_ver")
+
+            st.markdown("---")
+
+            # ── Flowchart visualisatie ────────────────────────
+            _wfed_phases = _wfed.get("phases", [])
+            if _wfed_phases:
+                _dot = ['digraph G {',
+                        '  rankdir=LR;',
+                        '  node [shape=box, style="filled,rounded", fontname="Helvetica", fontsize=11];',
+                        '  edge [fontsize=9];',
+                        '  START [shape=circle, label="▶", fillcolor="#27ae60", fontcolor=white, '
+                        'width=0.5, fixedsize=true];']
+                _prev_id = "START"
+                for _wfeph in _wfed_phases:
+                    _eid  = re.sub(r"[^a-zA-Z0-9_]", "_", _wfeph.get("id", "fase"))
+                    _ename = _wfeph.get("name", _eid).replace('"', "'")
+                    _etype = _wfeph.get("type", "llm_prompt")
+                    _ecolor = _WFED_COLORS.get(_etype, "white")
+                    _eicon  = _WFED_ICONS.get(_etype, "📋")
+                    _eappr  = " ⏸️" if _wfeph.get("require_approval") or _etype == "human_checkpoint" else ""
+                    _dot.append(f'  {_eid} [label="{_eicon} {_ename}\\n({_etype}){_eappr}", '
+                                f'fillcolor="{_ecolor}"];')
+                    _dot.append(f'  {_prev_id} -> {_eid};')
+                    _prev_id = _eid
+                _dot.append('  EINDE [shape=doublecircle, label="■", fillcolor="#e74c3c", '
+                            'fontcolor=white, width=0.5, fixedsize=true];')
+                _dot.append(f'  {_prev_id} -> EINDE;')
+                _dot.append("}")
+                st.graphviz_chart("\n".join(_dot), use_container_width=True)
+            else:
+                st.info("Nog geen fasen — voeg er hieronder een toe.")
+
+            # ── Fase-editor ───────────────────────────────────
+            st.markdown("#### 📋 Fasen")
+            _wfed_del = _wfed_up = _wfed_dn = None
+
+            for _wfei, _wfeph in enumerate(_wfed_phases):
+                _wfeph_type = _wfeph.get("type", "llm_prompt")
+                _wfeph_icon = _WFED_ICONS.get(_wfeph_type, "📋")
+                with st.expander(
+                    f"{_wfei + 1}. {_wfeph_icon} **{_wfeph.get('name', _wfeph.get('id', ''))}**"
+                    f" `{_wfeph_type}`",
+                    expanded=False,
+                ):
+                    _wfec1, _wfec2 = st.columns(2)
+                    with _wfec1:
+                        _wfeph["id"] = st.text_input(
+                            "ID", value=_wfeph.get("id", ""), key=f"wfed_ph_id_{_wfei}")
+                        _wfeph["name"] = st.text_input(
+                            "Naam", value=_wfeph.get("name", ""), key=f"wfed_ph_name_{_wfei}")
+                    with _wfec2:
+                        _wfeph["type"] = st.selectbox(
+                            "Type", _WFED_TYPES,
+                            index=_WFED_TYPES.index(_wfeph.get("type", "llm_prompt")),
+                            key=f"wfed_ph_type_{_wfei}")
+                        _wfeph["icon"] = st.text_input(
+                            "Icoon", value=_wfeph.get("icon", _WFED_ICONS.get(_wfeph["type"], "📋")),
+                            key=f"wfed_ph_icon_{_wfei}")
+
+                    _ept = _wfeph["type"]
+                    if _ept == "llm_prompt":
+                        _wfeph["prompt_template"] = st.text_area(
+                            "Prompt-template (gebruik {{sleutel}} voor substitutie)",
+                            value=_wfeph.get("prompt_template", ""),
+                            height=100, key=f"wfed_ph_pt_{_wfei}")
+                        _wfeph["output_key"] = st.text_input(
+                            "Output-sleutel", value=_wfeph.get("output_key", ""),
+                            key=f"wfed_ph_ok_{_wfei}",
+                            help="Naam waaronder het LLM-antwoord bewaard wordt als artifact")
+                        _wfeph["require_approval"] = st.checkbox(
+                            "Vereist goedkeuring na deze fase",
+                            value=_wfeph.get("require_approval", False),
+                            key=f"wfed_ph_ra_{_wfei}")
+                    elif _ept == "task_loop":
+                        _wfeph["source_key"] = st.text_input(
+                            "Bron-sleutel (artifact met takenlijst)",
+                            value=_wfeph.get("source_key", "task_list"),
+                            key=f"wfed_ph_sk_{_wfei}")
+                        _wfeph["require_approval"] = st.checkbox(
+                            "Vereist goedkeuring na uitvoering",
+                            value=_wfeph.get("require_approval", True),
+                            key=f"wfed_ph_ra_{_wfei}")
+                    elif _ept == "human_checkpoint":
+                        _wfeph["prompt"] = st.text_area(
+                            "Checkpoint-prompt (wat moet de gebruiker beoordelen?)",
+                            value=_wfeph.get("prompt", ""),
+                            height=80, key=f"wfed_ph_cp_{_wfei}")
+                    elif _ept == "tool_chain":
+                        _wfeph["require_approval"] = st.checkbox(
+                            "Vereist goedkeuring na uitvoering",
+                            value=_wfeph.get("require_approval", False),
+                            key=f"wfed_ph_ra_{_wfei}")
+                        _wf_steps_raw = st.text_area(
+                            "Stappen (JSON-lijst van {tool, args} objecten)",
+                            value=_wfjson.dumps(_wfeph.get("steps", []), indent=2, ensure_ascii=False),
+                            height=120, key=f"wfed_ph_steps_{_wfei}")
+                        try:
+                            _wfeph["steps"] = _wfjson.loads(_wf_steps_raw)
+                        except Exception:
+                            st.caption("⚠️ Ongeldige JSON voor stappen")
+
+                    _wfeb1, _wfeb2, _wfeb3 = st.columns(3)
+                    with _wfeb1:
+                        if _wfei > 0 and st.button("⬆️ Omhoog", key=f"wfed_up_{_wfei}"):
+                            _wfed_up = _wfei
+                    with _wfeb2:
+                        if _wfei < len(_wfed_phases) - 1 and st.button(
+                                "⬇️ Omlaag", key=f"wfed_dn_{_wfei}"):
+                            _wfed_dn = _wfei
+                    with _wfeb3:
+                        if st.button("🗑️ Verwijder", key=f"wfed_del_{_wfei}"):
+                            _wfed_del = _wfei
+
+            # Fase-acties verwerken
+            if _wfed_del is not None:
+                _wfed_phases.pop(_wfed_del)
+                st.rerun()
+            if _wfed_up is not None:
+                _wfed_phases[_wfed_up], _wfed_phases[_wfed_up - 1] = (
+                    _wfed_phases[_wfed_up - 1], _wfed_phases[_wfed_up])
+                st.rerun()
+            if _wfed_dn is not None:
+                _wfed_phases[_wfed_dn], _wfed_phases[_wfed_dn + 1] = (
+                    _wfed_phases[_wfed_dn + 1], _wfed_phases[_wfed_dn])
+                st.rerun()
+
+            # ── Fase toevoegen ────────────────────────────────
+            st.markdown("---")
+            with st.expander("➕ Nieuwe fase toevoegen"):
+                _wfna1, _wfna2 = st.columns(2)
+                with _wfna1:
+                    _new_ph_id   = st.text_input("Fase-ID", key="wfed_new_id",
+                                                  placeholder="bijv. analyse")
+                    _new_ph_name = st.text_input("Naam", key="wfed_new_name",
+                                                  placeholder="bijv. Analyse")
+                with _wfna2:
+                    _new_ph_type = st.selectbox("Type", _WFED_TYPES, key="wfed_new_type")
+                if st.button("➕ Voeg fase toe", key="wfed_add_ph"):
+                    if _new_ph_id.strip():
+                        _wfed_phases.append({
+                            "id":   _new_ph_id.strip(),
+                            "name": _new_ph_name.strip() or _new_ph_id.strip(),
+                            "type": _new_ph_type,
+                            "icon": _WFED_ICONS.get(_new_ph_type, "📋"),
+                        })
+                        st.rerun()
+                    else:
+                        st.warning("Vul een fase-ID in.")
+
+            # ── Opslaan / Reset ───────────────────────────────
+            st.markdown("---")
+            _wfes1, _wfes2, _wfes3 = st.columns(3)
+            with _wfes1:
+                if st.button("💾 Opslaan als template", type="primary", key="wfed_save"):
+                    try:
+                        from regian.core.workflow import _workflow_dir as _wfed_wdir
+                        _save_data = {k: v for k, v in _wfed.items() if not k.startswith("_")}
+                        _save_dir  = _wfed_wdir(_wf_pp)
+                        _save_dir.mkdir(parents=True, exist_ok=True)
+                        _save_path = _save_dir / f"{_wfed['id']}.json"
+                        _save_path.write_text(
+                            _wfjson.dumps(_save_data, indent=2, ensure_ascii=False),
+                            encoding="utf-8")
+                        st.success(f"✅ Template opgeslagen: `{_save_path}`")
+                        del st.session_state["wf_editor_data"]
+                        del st.session_state["wf_editor_sel"]
+                        st.rerun()
+                    except Exception as _wfse:
+                        st.error(f"❌ {_wfse}")
+            with _wfes2:
+                if st.button("📤 Exporteer als BPMN", key="wfed_export_bpmn"):
+                    from regian.skills.workflow import export_bpmn as _wfed_xbpmn
+                    # Sla eerst op, exporteer dan de opgeslagen versie
+                    try:
+                        from regian.core.workflow import _workflow_dir as _wfed_wdir2
+                        _save_data2 = {k: v for k, v in _wfed.items() if not k.startswith("_")}
+                        _save_dir2  = _wfed_wdir2(_wf_pp)
+                        _save_dir2.mkdir(parents=True, exist_ok=True)
+                        (_save_dir2 / f"{_wfed['id']}.json").write_text(
+                            _wfjson.dumps(_save_data2, indent=2, ensure_ascii=False),
+                            encoding="utf-8")
+                        st.success(_wfed_xbpmn(_wfed["id"]))
+                    except Exception as _wfxe:
+                        st.error(f"❌ {_wfxe}")
+            with _wfes3:
+                if st.button("🔄 Reset editor", key="wfed_reset"):
+                    if "wf_editor_data" in st.session_state:
+                        del st.session_state["wf_editor_data"]
+                    if "wf_editor_sel" in st.session_state:
+                        del st.session_state["wf_editor_sel"]
+                    st.rerun()
 
 
 if __name__ == "__main__":

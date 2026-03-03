@@ -62,16 +62,32 @@ def list_workflow_runs() -> str:
 def start_workflow(name: str, input: str) -> str:
     """
     Start een workflow met een initieel idee of invoer.
+    Als er geen actief project is, wordt automatisch een nieuw project aangemaakt en geactiveerd.
     name: ID van de workflow-template (bijv. van_idee_tot_mvp).
     input: het idee of de opdracht die door de workflow verwerkt wordt.
     """
+    from datetime import datetime as _dt
     from regian.core.workflow import start_workflow as _start, STATUS_WAITING, STATUS_DONE, STATUS_ERROR
+
+    pp = _project_path()
+    auto_project_msg = ""
+    if not pp:
+        # Automatisch een nieuw project aanmaken en activeren
+        safe_wf = re.sub(r"[^a-z0-9]", "_", name.lower())
+        auto_name = f"{safe_wf}_{_dt.now().strftime('%y%m%d%H%M')}"
+        desc = f"Auto-aangemaakt voor workflow '{name}': {input[:100]}"
+        from regian.skills.project import create_project, activate_project
+        create_project(auto_name, project_type="software", description=desc)
+        activate_project(auto_name)
+        pp = _project_path()
+        auto_project_msg = f"📁 Nieuw project aangemaakt en geactiveerd: `{auto_name}`\n\n"
+
     try:
-        run = _start(name, input, _project_path())
+        run = _start(name, input, pp)
     except FileNotFoundError as e:
         return f"❌ {e}"
 
-    return _format_run_status(run)
+    return auto_project_msg + _format_run_status(run)
 
 
 def workflow_status(run_id: str) -> str:
