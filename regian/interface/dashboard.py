@@ -2106,16 +2106,7 @@ def start_gui():
                                 else:
                                     _wfcol.markdown(f"⬜ {_wficon} {_wfph.get('name', _wfph['id'])}")
 
-                        if _wfr.phase_log:
-                            st.markdown("**Laatste uitvoer:**")
-                            _wf_last_entry = _wfr.phase_log[-1]
-                            if _wf_last_entry.get("revised"):
-                                st.caption(
-                                    f"🔄 *Herzien op basis van feedback:* "
-                                    f"`{_wf_last_entry.get('feedback', '')[:80]}`"
-                                )
-                            st.markdown(_wf_last_entry.get("output", "")[:3000])
-
+                        # ── Artifacts bovenaan, altijd zichtbaar ───────────
                         _wf_art_keys = [k for k in _wfr.artifacts if k != "input"]
                         if _wf_art_keys:
                             st.markdown("**📦 Artifacts**")
@@ -2127,10 +2118,45 @@ def start_gui():
                                     f"📄 **{_wfk}** · {_wf_art_lines} regels"
                                     f" · _{_wf_art_preview}…_"
                                 )
-                                with st.expander(_wf_art_label, expanded=False):
+                                with st.expander(_wf_art_label, expanded=True):
                                     st.markdown(_wf_art_val)
 
+                        # ── Laatste uitvoer: taken als inklapbare regels ───
+                        if _wfr.phase_log:
+                            _wf_last_entry = _wfr.phase_log[-1]
+                            if _wf_last_entry.get("revised"):
+                                st.caption(
+                                    f"🔄 *Herzien op basis van feedback:* "
+                                    f"`{_wf_last_entry.get('feedback', '')[:80]}`"
+                                )
+                            _wf_last_out = _wf_last_entry.get("output", "")
+                            import re as _wf_re
+                            _wf_task_blocks = _wf_re.split(
+                                r'(?=\*\*Taak \d+/\d+:\*\*)', _wf_last_out
+                            )
+                            _wf_task_blocks = [b for b in _wf_task_blocks if b.strip()]
+                            if len(_wf_task_blocks) > 1:
+                                st.markdown("**Uitgevoerde taken:**")
+                                for _wftb in _wf_task_blocks:
+                                    _wftb_lines = _wftb.strip().splitlines()
+                                    _wftb_header = _wftb_lines[0] if _wftb_lines else "(taak)"
+                                    _wftb_body = "\n".join(_wftb_lines[1:]).strip()
+                                    with st.expander(_wftb_header, expanded=False):
+                                        if _wftb_body:
+                                            st.markdown(_wftb_body)
+                            else:
+                                st.markdown("**Laatste uitvoer:**")
+                                st.markdown(_wf_last_out[:3000])
+
                         if _wfr.status == STATUS_WAITING:
+                            # Toon welke fase wacht op goedkeuring
+                            _wf_cur_ph = _wf_phases[_wf_cur] if _wf_cur < _wf_total else {}
+                            st.info(
+                                f"⏸️ **Wacht op goedkeuring \u2014 "
+                                f"Fase {_wf_cur + 1}/{_wf_total}: "
+                                f"{_wf_cur_ph.get('name', '')}** "
+                                f"(`{_wf_cur_ph.get('type', '')}`)"
+                            )
                             st.markdown("---")
                             # Toon vorige bijsturing als herinnering
                             _wf_prev_fb = ""

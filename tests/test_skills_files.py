@@ -178,3 +178,91 @@ class TestCopyFile:
         assert "Succes" in result
         assert (tmp_root / "origineel.txt").exists()   # origineel blijft
         assert read_file("kopie.txt") == "kopieerbaar"
+
+    def test_copy_directory(self, tmp_root):
+        from regian.skills.files import write_file, copy_file
+        write_file("bronmap/a.txt", "inhoud a")
+        write_file("bronmap/b.txt", "inhoud b")
+        result = copy_file("bronmap", "doelmap")
+        assert "Succes" in result
+        assert (tmp_root / "doelmap" / "a.txt").exists()
+
+    def test_copy_nonexistent_source(self, tmp_root):
+        from regian.skills.files import copy_file
+        result = copy_file("bestaat_niet_bron.txt", "doel.txt")
+        assert "Fout" in result
+
+
+# ── search_files ──────────────────────────────────────────────────────────────
+
+class TestSearchFiles:
+    def test_search_finds_matching_files(self, tmp_root):
+        from regian.skills.files import write_file, search_files
+        write_file("zoek_mij.txt", "inhoud")
+        write_file("zoek_mij_ook.txt", "inhoud")
+        write_file("iets_anders.txt", "inhoud")
+        result = search_files("zoek_mij")
+        assert isinstance(result, list)
+        assert any("zoek_mij.txt" in r for r in result)
+
+    def test_search_returns_message_when_no_match(self, tmp_root):
+        from regian.skills.files import search_files
+        result = search_files("xyznietsgevonden123abc")
+        assert "Geen resultaten" in result or isinstance(result, list)
+
+    def test_search_invalid_dir(self, tmp_root):
+        from regian.skills.files import search_files
+        result = search_files("iets", path="bestaat_niet_map_xyz")
+        assert "Fout" in result
+
+
+# ── Exception-paden via monkeypatch ───────────────────────────────────────────
+
+class TestExceptionPaths:
+    """Dekt de except-blokken af die in normale omstandigheden niet worden bereikt."""
+
+    def test_write_file_exception_returns_fout(self, tmp_root, monkeypatch):
+        import pathlib
+
+        def _raise(*a, **kw):
+            raise OSError("simuleerde schrijffout")
+
+        monkeypatch.setattr(pathlib.Path, "write_text", _raise)
+        from regian.skills.files import write_file
+        result = write_file("test_exc.txt", "data")
+        assert "Fout" in result
+
+    def test_read_file_exception_returns_fout(self, tmp_root, monkeypatch):
+        import pathlib
+
+        (tmp_root / "read_exc.txt").write_text("inhoud", encoding="utf-8")
+
+        def _raise(*a, **kw):
+            raise OSError("simuleerde leesfout")
+
+        monkeypatch.setattr(pathlib.Path, "read_text", _raise)
+        from regian.skills.files import read_file
+        result = read_file("read_exc.txt")
+        assert "Fout" in result
+
+    def test_list_directory_exception_returns_fout(self, tmp_root, monkeypatch):
+        import pathlib
+
+        def _raise(*a, **kw):
+            raise OSError("simuleerde iterdir-fout")
+
+        monkeypatch.setattr(pathlib.Path, "iterdir", _raise)
+        from regian.skills.files import list_directory
+        result = list_directory(".")
+        assert "Fout" in result
+
+    def test_create_directory_exception_returns_fout(self, tmp_root, monkeypatch):
+        import pathlib
+
+        def _raise(*a, **kw):
+            raise OSError("simuleerde mkdir-fout")
+
+        monkeypatch.setattr(pathlib.Path, "mkdir", _raise)
+        from regian.skills.files import create_directory
+        result = create_directory("nieuwe_map")
+        assert "Fout" in result

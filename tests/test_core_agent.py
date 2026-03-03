@@ -222,3 +222,108 @@ class TestOrchestratorAgent:
         catalog = orch._tool_catalog()
         assert isinstance(catalog, str)
         assert len(catalog) > 0
+
+
+# ── _project_context_block ─────────────────────────────────────────────────────
+
+class TestProjectContextBlock:
+    """Tests voor _project_context_block — inclusief de nieuwe src/-instructie."""
+
+    def _block(self, ctx):
+        from regian.core.agent import _project_context_block
+        return _project_context_block(ctx)
+
+    def test_returns_empty_for_none(self):
+        assert self._block(None) == ""
+
+    def test_contains_project_name(self):
+        ctx = {"name": "MijnProject", "type": "python", "path": "/workspace/mijn"}
+        result = self._block(ctx)
+        assert "MijnProject" in result
+
+    def test_contains_path(self):
+        ctx = {"name": "P", "type": "node", "path": "/workspace/p"}
+        result = self._block(ctx)
+        assert "/workspace/p" in result
+
+    def test_software_type_shows_src_hint(self):
+        for ptype in ("python", "node", "typescript", "javascript", "react", "vue",
+                      "web", "flutter", "rust", "go", "java", "kotlin", "swift"):
+            ctx = {"name": "P", "type": ptype, "path": "/workspace/p"}
+            result = self._block(ctx)
+            assert "src/" in result, f"type '{ptype}' moet src/ hint tonen"
+
+    def test_non_software_type_no_src_hint(self):
+        ctx = {"name": "P", "type": "data", "path": "/workspace/p"}
+        result = self._block(ctx)
+        assert "src/" not in result
+
+    def test_contains_git_repo_if_present(self):
+        ctx = {"name": "P", "type": "python", "path": "/w", "git_repo": "git@github.com:x/y"}
+        result = self._block(ctx)
+        assert "git@github.com:x/y" in result
+
+    def test_git_repo_absent_if_not_set(self):
+        ctx = {"name": "P", "type": "python", "path": "/w"}
+        result = self._block(ctx)
+        assert "Repo:" not in result
+
+    def test_contains_description_if_present(self):
+        ctx = {"name": "P", "type": "python", "path": "/w", "description": "Een testproject"}
+        result = self._block(ctx)
+        assert "Een testproject" in result
+
+    def test_always_contains_path_warning(self):
+        ctx = {"name": "P", "type": "docs", "path": "/workspace/docs"}
+        result = self._block(ctx)
+        assert "/workspace/docs/" in result
+        assert "ALTIJD" in result
+
+
+# ── _get_project_context ───────────────────────────────────────────────────────
+
+class TestGetProjectContext:
+    def test_returns_none_when_no_active_project(self, monkeypatch):
+        import regian.core.agent as ag
+        monkeypatch.setattr("regian.core.agent.get_active_project", lambda: None)
+        result = ag._get_project_context()
+        assert result is None
+
+    def test_returns_none_when_manifest_not_found(self, monkeypatch):
+        import regian.core.agent as ag
+        monkeypatch.setattr("regian.core.agent.get_active_project", lambda: "bestaat_niet_xyz")
+        result = ag._get_project_context()
+        assert result is None
+
+
+# ── tools_for_project ──────────────────────────────────────────────────────────
+
+class TestToolsForProject:
+    def test_returns_all_tools_for_none_type(self):
+        from regian.core.agent import registry
+        result = registry.tools_for_project(project_type=None)
+        assert len(result) > 0
+
+    def test_returns_all_tools_for_all_type(self):
+        from regian.core.agent import registry
+        result = registry.tools_for_project(project_type="all")
+        assert len(result) == len(registry.tools)
+
+    def test_allowed_tools_filters_by_module(self):
+        from regian.core.agent import registry
+        result = registry.tools_for_project(allowed_tools=["files"])
+        for t in result:
+            func = registry._functions.get(t.name)
+            assert func is not None
+            assert func.__module__.split(".")[-1] == "files"
+
+    def test_docs_type_returns_subset(self):
+        from regian.core.agent import registry, _TOOLS_BY_TYPE
+        result = registry.tools_for_project(project_type="docs")
+        # Als docs een beperkte set heeft, mag het niet meer zijn dan all
+        assert len(result) <= len(registry.tools)
+
+    def test_unknown_type_falls_back_to_all(self):
+        from regian.core.agent import registry
+        result = registry.tools_for_project(project_type="onbekend_type_xyz")
+        assert len(result) == len(registry.tools)

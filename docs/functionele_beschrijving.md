@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.1.15 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.15 — Intern document
+**Versie:** 1.1.17 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.17 — Intern document
 
 ---
 
@@ -132,6 +132,7 @@ Zes publieke skills beheren de levenscyclus van projecten:
 **Fase 2 — Contextbewuste agent (`regian/core/agent.py`)**  
 Bij een actief project wordt de systeemprompt van het LLM dynamisch opgebouwd met:
 - Projectnaam, type en beschrijving
+- **Bestandspad-instructie**: de agent wordt expliciet geïnstrueerd om bestanden altijd binnen het projectpad aan te maken; voor software-projecten (python, node, typescript, react, web, …) wordt de `src/`-submap aanbevolen
 - Gefilterde toolset op basis van projecttype: bij `docs`- en `data`-projecten zijn GitHub-skills verborgen
 
 **Fase 3 — Profielkiezer in dashboard (`regian/interface/dashboard.py`)**  
@@ -276,7 +277,7 @@ Geen configuratie, geen registratie — het systeem ontdekt de skill automatisch
 
 ---
 
-## 8. Workflow-systeem (nieuw in 1.1.15)
+## 8. Workflow-systeem (nieuw in 1.1.17)
 
 ### 8.1 Concept
 
@@ -308,7 +309,15 @@ Ingebouwde template: `van_idee_tot_mvp` (4 fasen: PRD → taken → implementati
 
 Workflows kunnen worden geïmporteerd vanuit en geëxporteerd naar BPMN 2.0 XML-bestanden (compatibel met [bpmn.io](https://bpmn.io)).
 
-### 8.6 Beschikbare slash-commands
+### 8.6 Dashboard-weergave workflow-runs
+
+De run-weergave toont per run:
+- **Fase-indicators** — visuele badges (✅/▶️/⬜) per fase
+- **Artifacts** — altijd uitgeklapt bovenaan de run; inhoud direct zichtbaar
+- **Uitgevoerde taken** — elke taak (`**Taak X/Y:**`) is een inklapbare expander; standaard ingeklapt
+- **Goedkeuringscontext** — bij `STATUS_WAITING` verschijnt een infobanner met fase-naam, -index en -type boven de goedkeuringsacties
+
+### 8.7 Beschikbare slash-commands
 
 | Command | Functie |
 |---|---|
@@ -324,4 +333,4 @@ Workflows kunnen worden geïmporteerd vanuit en geëxporteerd naar BPMN 2.0 XML-
 
 ---
 
-*Regian OS — Milestone 1.1.15 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.1.17 · Intern document · 3 maart 2026*

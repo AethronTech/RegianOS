@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.1.15 · **Datum:** 3 maart 2026
+**Versie:** 1.1.17 · **Datum:** 3 maart 2026
 
 ---
 
@@ -563,7 +563,11 @@ Een workflow is een JSON-bestand met een geordende lijst van **fasen** (phases).
 Open de **🔄 Workflows**-tab in de cockpit:
 
 - **▶️ Starten**: kies een template, voer je idee in, klik *Start*.
-- **📋 Actieve runs**: bekijk de voortgang, artifacts en logs. Gebruik *Goedkeuren* of *Annuleren* bij pauzes.
+- **📋 Actieve runs**: bekijk de voortgang en resultaten. Per run zie je:
+  - Fase-badges (✅ klaar / ▶️ actief / ⬜ gepland)
+  - **📦 Artifacts** — altijd uitgeklapt bovenaan, direct leesbaar
+  - **Uitgevoerde taken** — elke taak is een inklapbare regel (`**Taak X/Y: …**`); klik om de details te tonen
+  - Bij pauzering: een infobanner met de precieze fase die wacht op goedkeuring, plus feedback-invoer en de knoppen *Goedkeuren*, *Bijsturen* en *Annuleren*
 - **📚 Templates**: bekijk beschikbare templates, exporteer als BPMN, importeer een `.bpmn`-bestand of laat het LLM een nieuw template genereren.
 
 ### 11.3 Workflow starten via slash-command
@@ -618,4 +622,4 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.1.15 · 3 maart 2026*
+*Regian OS — Milestone 1.1.17 · 3 maart 2026*

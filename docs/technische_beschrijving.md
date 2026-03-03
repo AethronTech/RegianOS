@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.1.15 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.15 — Intern document
+**Versie:** 1.1.17 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.17 — Intern document
 
 ---
 
@@ -340,16 +340,17 @@ Setters gebruiken `dotenv.set_key()` voor persistentie én `os.environ[...]` voo
 | Module | Dekking |
 |---|---|
 | `core/action_log.py` | ~90% |
-| `core/agent.py` | ~74% |
+| `core/agent.py` | ~79% |
 | `core/scheduler.py` | ~62% |
-| `settings.py` | ~98% |
-| `skills/project.py` | ~96% |
+| `settings.py` | ~90% |
+| `skills/project.py` | ~95% |
 | `skills/knowledge.py` | ~85% |
 | `skills/backup.py` | ~87% |
+| `skills/files.py` | ~87% |
 | `skills/*.py` (overige) | ~80–93% |
-| **Totaal** | **81.48%** |
+| **Totaal** | **≥80%** |
 
-325 tests, allemaal passend. Uitvoeren:
+434 tests, allemaal passend. Drempel: `--cov-fail-under=80`. Uitvoeren:
 
 ```bash
 pytest --cov=regian --cov-report=html
@@ -461,7 +462,7 @@ elif provider == "nieuwe_provider":
 
 ---
 
-## 13. Workflow-engine (Milestone 1.1.15)
+## 13. Workflow-engine (Milestone 1.1.17)
 
 ### 13.1 Architectuur
 
@@ -545,4 +546,4 @@ Import loopt via `xml.etree.ElementTree`; sequence flows bepalen de fase-volgord
 
 ---
 
-*Regian OS — Milestone 1.1.15 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.1.17 · Intern document · 3 maart 2026*

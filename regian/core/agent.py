@@ -57,6 +57,10 @@ def _project_context_block(ctx: dict | None) -> str:
     if ctx.get("description"):
         lines.append(f"  Info:  {ctx['description']}")
     lines.append("────────────────────────────────────────────────")
+    lines.append(f"  ⚠️  Schrijf bestanden ALTIJD binnen het projectpad: {ctx['path']}/")
+    if ctx.get("type", "").lower() in ("python", "node", "typescript", "javascript", "react", "vue", "web", "flutter", "rust", "go", "java", "kotlin", "swift"):
+        lines.append(f"      Gebruik bij voorkeur de `src/` submap: {ctx['path']}/src/")
+    lines.append("────────────────────────────────────────────────")
     return "\n".join(lines)
 
 # ── SKILL REGISTRY ─────────────────────────────────────────────────────────────
@@ -217,6 +221,8 @@ Regels:
 - Gebruik alleen tools die in de lijst staan
 - Vul args in op basis van de opdracht
 - Relatieve paden zijn altijd t.o.v. het actieve projectpad (indien aanwezig)
+- Schrijf bestanden ALTIJD in het actieve projectpad — nooit in de werkmap-root of een ander project
+- Voor software-projecten: maak bestanden aan in `<projectpad>/src/` tenzij het configuratie/root-bestanden zijn
 - Zet stappen in de juiste volgorde
 - Als de opdracht geen tools vereist, geef terug: []
 

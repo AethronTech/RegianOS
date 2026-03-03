@@ -77,7 +77,7 @@ if [[ "$*" != *"--skip-tests"* ]]; then
         --cov=regian \
         --cov-report=term-missing \
         --cov-report=html:htmlcov \
-        --cov-fail-under=60
+        --cov-fail-under=80
     TEST_EXIT=$?
     if [ $TEST_EXIT -ne 0 ]; then
         echo ""
