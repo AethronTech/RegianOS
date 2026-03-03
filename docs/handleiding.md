@@ -109,36 +109,6 @@ Via het paperclip-icoon (📎) naast het invoerveld kun je rechtstreeks bestande
 | 🟢 Stap | Veilige stap in HITL-overzicht |
 | 🔴 Stap | Gevaarlijke stap die bevestiging vereist |
 
-De **kennisbank** maakt het mogelijk om bestanden permanent als achtergrondcontext bij te houden voor het LLM. Elk bestand dat je toevoegt, wordt automatisch bij elke chat-prompt meegegeven, zonder dat je er steeds opnieuw naar hoeft te verwijzen.
-
-**Wanneer gebruiken?**  
-- Projectspecificaties of architectuurdocumenten die de agent altijd moet kennen
-- Eerder gegenereerde samenvattingen of resultaten
-- Codestijlgidsen, API-documentatie of woordenlijsten
-
-### Kennisbank-commands
-
-| Command | Beschrijving |
-|---|---|
-| `/add_to_knowledge <pad>` | Voegt een bestand toe (relatief pad t.o.v. werkmap) |
-| `/list_knowledge` | Toont alle kennisbestanden met grootte |
-| `/remove_from_knowledge <naam>` | Verwijdert één kennisbestand |
-| `/clear_knowledge` | Wist de volledige kennisbank |
-
-**Voorbeelden:**
-
-```
-/add_to_knowledge docs/architectuur.md
-/add_to_knowledge specificatie.pdf
-/list_knowledge
-/remove_from_knowledge architectuur.md
-```
-
-**Kennisbank widget in zijbalk:**  
-De linkerzijbalk toont automatisch hoeveel kennisbestanden er zijn en welke. De context wordt bij elke LLM-opdracht meegegeven (maximaal 8 000 tekens).
-
-> **Tip:** Bestanden van de chat-upload worden automatisch opgeslagen in `uploads/`. Je kunt ze daarna rechtstreeks toevoegen aan de kennisbank: `/add_to_knowledge uploads/mijn-document.pdf`
-
 ### Voortgangsindicatoren
 
 Tijdens het verwerken van een vraag toont de agent genummerde stappen:
@@ -165,6 +135,29 @@ Je chatgeschiedenis wordt **automatisch bewaard** tussen sessies. Bij het opnieu
 ---
 
 ## Kennisbank
+
+De **kennisbank** maakt het mogelijk om bestanden permanent als achtergrondcontext bij te houden voor het LLM. Elk bestand dat je toevoegt, wordt automatisch bij elke chat-prompt meegegeven, zonder dat je er steeds opnieuw naar hoeft te verwijzen.
+
+**Wanneer gebruiken?**  
+- Projectspecificaties of architectuurdocumenten die de agent altijd moet kennen
+- Eerder gegenereerde samenvattingen of resultaten
+- Codestijlgidsen, API-documentatie of woordenlijsten
+
+| Command | Beschrijving |
+|---|---|
+| `/add_to_knowledge <pad>` | Voegt een bestand toe (relatief pad t.o.v. werkmap) |
+| `/list_knowledge` | Toont alle kennisbestanden met grootte |
+| `/remove_from_knowledge <naam>` | Verwijdert één kennisbestand |
+| `/clear_knowledge` | Wist de volledige kennisbank |
+
+**Kennisbank widget in zijbalk:**  
+De linkerzijbalk toont automatisch hoeveel kennisbestanden er zijn en welke. De context wordt bij elke LLM-opdracht meegegeven (maximaal 8 000 tekens).
+
+> **Tip:** Bestanden van de chat-upload worden automatisch opgeslagen in `uploads/`. Je kunt ze daarna rechtstreeks toevoegen aan de kennisbank: `/add_to_knowledge uploads/mijn-document.pdf`
+
+---
+
+## Slash Commands
 
 Slash-commando's sturen een specifieke skill rechtstreeks aan, zonder tussenkomst van het LLM. Dit is sneller en voorspelbaarder.
 
@@ -514,7 +507,7 @@ Klik op ⏸️ naast de taak in de Cron-tab. De taak blijft bewaard maar wordt n
 
 ---
 
-## 11. Workflows — Van Idee tot MVP
+## Workflows — Van Idee tot MVP
 
 Met de workflow-module kun je complexe meerstappe-processen definiëren die automatisch door het systeem worden uitgevoerd, met mogelijkheden voor menselijke tussenkomst op cruciale momenten.
 
