@@ -1966,10 +1966,12 @@ def start_gui():
                         with st.spinner("Workflow wordt gestart..."):
                             try:
                                 _wfrun = _wf_start(_wf_names[_wf_sel_name], _wf_input.strip(), _wf_pp)
-                                st.success(f"✅ Run `{_wfrun.run_id}` gestart!")
-                                st.rerun()
+                                st.toast(f"✅ Run `{_wfrun.run_id}` gestart — schakel over naar Actieve runs.")
                             except Exception as _wferr:
                                 st.error(f"❌ {_wferr}")
+                                st.stop()
+                        st.session_state["wf_sub"] = "📋 Actieve runs"
+                        st.rerun()
 
         # ── Sectie 2: Actieve runs ─────────────────────────────
         elif wf_sub == "📋 Actieve runs":
@@ -2020,6 +2022,12 @@ def start_gui():
 
                         if _wfr.status == STATUS_WAITING:
                             st.markdown("---")
+                            # Toon vorige bijsturing als herinnering
+                            _wf_prev_fb = ""
+                            if _wfr.phase_log and _wfr.phase_log[-1].get("revised"):
+                                _wf_prev_fb = _wfr.phase_log[-1].get("feedback", "")
+                            if _wf_prev_fb:
+                                st.caption(f"🔄 *Bijgestuurd:* {_wf_prev_fb[:140]}")
                             _wf_feedback = st.text_area(
                                 "Feedback (optioneel)",
                                 key=f"wf_feedback_{_wfr.run_id}",
@@ -2034,9 +2042,10 @@ def start_gui():
                                         try:
                                             _wf_advance(_wfr.run_id, _wf_feedback, _wf_pp)
                                             st.toast("✅ Fase goedgekeurd, volgende fase gestart.")
-                                            st.rerun()
                                         except Exception as _wfe:
                                             st.error(f"❌ {_wfe}")
+                                            st.stop()
+                                    st.rerun()
                             with _wfc2:
                                 if _wf_feedback.strip():
                                     if st.button("🔄 Bijsturen & opnieuw genereren",
@@ -2044,10 +2053,12 @@ def start_gui():
                                         with st.spinner("🧠 Fase opnieuw uitvoeren met feedback..."):
                                             try:
                                                 _wf_revise(_wfr.run_id, _wf_feedback.strip(), _wf_pp)
+                                                st.session_state[f"wf_feedback_{_wfr.run_id}"] = ""
                                                 st.toast("🔄 Uitvoer bijgewerkt — bekijk het resultaat hierboven.")
-                                                st.rerun()
                                             except Exception as _wfe:
                                                 st.error(f"❌ {_wfe}")
+                                                st.stop()
+                                        st.rerun()
                                 else:
                                     st.button("🔄 Bijsturen & opnieuw genereren",
                                               key=f"wf_revise_{_wfr.run_id}",
