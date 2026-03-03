@@ -2335,6 +2335,20 @@ def start_gui():
                         _url_col, _term_col = st.columns(2)
                         with _url_col:
                             _port = "3000" if "react" in _run_cmd.lower() or "next" in _run_cmd.lower() else "5173" if "vite" in _run_cmd.lower() else "8080"
+                            # Probeer poort te lezen uit npm script body in package.json
+                            if "npm" in _run_cmd and (_pp_path / "package.json").exists():
+                                try:
+                                    import re as _wf_re_port, json as _wf_port_json
+                                    _pkg_scripts = _wf_port_json.loads(
+                                        (_pp_path / "package.json").read_text()
+                                    ).get("scripts", {})
+                                    _script_key = _run_cmd.replace("npm run ", "").replace("npm ", "").strip()
+                                    _script_body = _pkg_scripts.get(_script_key, "")
+                                    _port_match = _wf_re_port.search(r"-p\s+(\d+)|--port[= ](\d+)|:(\d{4,5})", _script_body)
+                                    if _port_match:
+                                        _port = next(g for g in _port_match.groups() if g)
+                                except Exception:
+                                    pass
                             st.link_button(f"🌐 Open localhost:{_port}", f"http://localhost:{_port}")
                         with _term_col:
                             st.code(f"cd {_pp_run}\n{_run_cmd}", language="bash")
