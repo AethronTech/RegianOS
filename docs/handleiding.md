@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.0.10 · **Datum:** 1 maart 2026
+**Versie:** 1.1.0 · **Datum:** 1 maart 2026
 
 ---
 
@@ -16,7 +16,8 @@
 8. [Instellingen](#instellingen)  
 9. [Beveiliging & HITL](#beveiliging-hitl)  
 10. [Projectbeheer](#projectbeheer)  
-11. [Tips & Veelgestelde Vragen](#tips-veelgestelde-vragen)
+11. [Workflows — Van Idee tot MVP](#workflows-van-idee-tot-mvp)  
+12. [Tips & Veelgestelde Vragen](#tips-veelgestelde-vragen)
 
 ---
 
@@ -510,4 +511,81 @@ Klik op ⏸️ naast de taak in de Cron-tab. De taak blijft bewaard maar wordt n
 
 ---
 
-*Regian OS — Milestone 1.0.5 · 1 maart 2026*
+---
+
+## 11. Workflows — Van Idee tot MVP
+
+Met de workflow-module kun je complexe meerstappe-processen definiëren die automatisch door het systeem worden uitgevoerd, met mogelijkheden voor menselijke tussenkomst op cruciale momenten.
+
+### 11.1 Wat is een workflow?
+
+Een workflow is een JSON-bestand met een geordende lijst van **fasen** (phases). Elke fase heeft een type dat bepaalt hoe het systeem hem uitvoert:
+
+| Type | Beschrijving |
+|---|---|
+| `llm_prompt` | Stuur een prompt naar het LLM, sla het antwoord op als artifact |
+| `task_loop` | Voer een LLM-gegenereerde takenlijst uit via de agent |
+| `human_checkpoint` | Pauzeer en wacht op jouw goedkeuring |
+| `tool_chain` | Voer een vaste reeks tools deterministisch uit |
+
+### 11.2 De Workflows-tab in het dashboard
+
+Open de **🔄 Workflows**-tab in de cockpit:
+
+- **▶️ Starten**: kies een template, voer je idee in, klik *Start*.
+- **📋 Actieve runs**: bekijk de voortgang, artifacts en logs. Gebruik *Goedkeuren* of *Annuleren* bij pauzes.
+- **📚 Templates**: bekijk beschikbare templates, exporteer als BPMN, importeer een `.bpmn`-bestand of laat het LLM een nieuw template genereren.
+
+### 11.3 Workflow starten via slash-command
+
+```
+/start_workflow van_idee_tot_mvp Bouw een productiviteits-app voor developers
+```
+
+Volg daarna de voortgang:
+
+```
+/workflow_status <run_id>
+```
+
+Keur een wachtende fase goed:
+
+```
+/approve_workflow <run_id> Ziet er goed uit, ga door!
+```
+
+Annuleer:
+
+```
+/cancel_workflow <run_id>
+```
+
+### 11.4 Ingebouwde template: van_idee_tot_mvp
+
+De meegeleverde template `van_idee_tot_mvp` bevat vier fasen:
+
+1. **Product Architect** (llm_prompt + goedkeuring) — schrijft een PRD
+2. **Lead Developer** (llm_prompt + goedkeuring) — breakdown in taken
+3. **AI Implementatie** (task_loop + goedkeuring) — voert alle taken uit via de agent
+4. **Review** (human_checkpoint) — eindcontrole door de gebruiker
+
+### 11.5 Eigen template maken
+
+Via het dashboard (LLM-generator) of via slash-command:
+
+```
+/create_workflow_template code_review Automatiseer code-reviews op pull requests
+```
+
+Of maak een `.json`-bestand aan in `<werkmap>/.regian_workflow/mijn_workflow.json`.
+
+### 11.6 BPMN import/export
+
+Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
+
+- **Export**: `/export_bpmn van_idee_tot_mvp` → `.bpmn` XML-bestand
+- **Import**: `/import_bpmn /pad/naar/bestand.bpmn` → converteert naar workflow-template
+
+---
+
+*Regian OS — Milestone 1.1.0 · 1 maart 2026*

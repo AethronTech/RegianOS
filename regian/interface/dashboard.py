@@ -745,8 +745,8 @@ def start_gui():
         st.session_state.active_project = get_active_project()
 
     # ── Tabs ──────────────────────────────────────────────────
-    tab_chat, tab_help, tab_cron, tab_log, tab_settings = st.tabs([
-        "💬 Chat", "📖 Help & Commands", "📅 Cron", "📋 Log", "⚙️ Instellingen"
+    tab_chat, tab_help, tab_cron, tab_log, tab_settings, tab_workflows = st.tabs([
+        "💬 Chat", "📖 Help & Commands", "📅 Cron", "📋 Log", "⚙️ Instellingen", "🔄 Workflows"
     ])
 
     # ── CHAT TAB ──────────────────────────────────────────────
@@ -1580,6 +1580,179 @@ def start_gui():
                 set_jobs_file_name(_DEFAULT_JOBS_FILE_NAME)
                 st.success(f"✅ Bestandsnamen gereset naar standaard.")
                 st.rerun()
+
+    # ── WORKFLOWS TAB ─────────────────────────────────────────
+    with tab_workflows:
+        from regian.core.workflow import (
+            list_workflows as _wf_list_templates,
+            list_runs as _wf_list_runs,
+            advance_run as _wf_advance,
+            cancel_run as _wf_cancel,
+            start_workflow as _wf_start,
+            _get_phases,
+            STATUS_WAITING, STATUS_DONE, STATUS_ERROR, STATUS_RUNNING,
+        )
+        from regian.skills.workflow import _project_path as _wf_proj_path, _format_run_status
+
+        _wf_pp = _wf_proj_path()
+        st.subheader("🔄 Workflows")
+
+        wf_sub = st.radio(
+            "Sectie",
+            ["▶️ Starten", "📋 Actieve runs", "📚 Templates"],
+            horizontal=True,
+            label_visibility="collapsed",
+            key="wf_sub",
+        )
+
+        # ── Sectie 1: Starten ─────────────────────────────────
+        if wf_sub == "▶️ Starten":
+            st.markdown("### ▶️ Workflow starten")
+            _wf_templates = _wf_list_templates(_wf_pp)
+            if not _wf_templates:
+                st.info("Geen workflow-templates gevonden.")
+            else:
+                _wf_names = {w["name"]: w["id"] for w in _wf_templates}
+                _wf_sel_name = st.selectbox(
+                    "Kies een workflow-template",
+                    options=list(_wf_names.keys()),
+                    key="wf_select_template",
+                )
+                _wf_sel = _wf_templates[[w["name"] for w in _wf_templates].index(_wf_sel_name)]
+                st.caption(f"**{_wf_sel['description']}** — {_wf_sel['phases']} fasen")
+                _wf_input = st.text_area(
+                    "Invoer / idee",
+                    placeholder="Beschrijf je idee of opdracht...",
+                    height=120,
+                    key="wf_input",
+                )
+                if st.button("🚀 Start workflow", type="primary", key="wf_start_btn"):
+                    if not _wf_input.strip():
+                        st.warning("Voer een idee of opdracht in.")
+                    else:
+                        with st.spinner("Workflow wordt gestart..."):
+                            try:
+                                _wfrun = _wf_start(_wf_names[_wf_sel_name], _wf_input.strip(), _wf_pp)
+                                st.success(f"✅ Run `{_wfrun.run_id}` gestart!")
+                                st.rerun()
+                            except Exception as _wferr:
+                                st.error(f"❌ {_wferr}")
+
+        # ── Sectie 2: Actieve runs ─────────────────────────────
+        elif wf_sub == "📋 Actieve runs":
+            st.markdown("### 📋 Actieve runs")
+            _wf_runs = _wf_list_runs(_wf_pp)
+            if not _wf_runs:
+                st.info("Geen workflow-runs gevonden voor dit project.")
+            else:
+                for _wfr in _wf_runs:
+                    _wfbadge = {"running": "🔄", "waiting": "⏸️", "done": "✅",
+                                "cancelled": "❌", "error": "💥"}.get(_wfr.status, "❓")
+                    with st.expander(
+                        f"{_wfbadge} `{_wfr.run_id}` — **{_wfr.workflow_name}** — {_wfr.started_at[:16]}",
+                        expanded=(_wfr.status in (STATUS_WAITING, STATUS_RUNNING)),
+                    ):
+                        _wf_phases = _get_phases(_wfr)
+                        _wf_total = len(_wf_phases)
+                        _wf_cur = _wfr.current_phase_index
+                        if _wf_total:
+                            _wf_cols = st.columns(_wf_total)
+                            for _wfpi, (_wfph, _wfcol) in enumerate(zip(_wf_phases, _wf_cols)):
+                                _wfph_done = _wfpi < _wf_cur or _wfr.status == STATUS_DONE
+                                _wfph_active = _wfpi == _wf_cur and _wfr.status in (STATUS_WAITING, STATUS_RUNNING)
+                                _wficon = _wfph.get("icon", "📋")
+                                if _wfph_done:
+                                    _wfcol.markdown(f"✅ {_wficon} **{_wfph.get('name', _wfph['id'])}**")
+                                elif _wfph_active:
+                                    _wfcol.markdown(f"▶️ {_wficon} **{_wfph.get('name', _wfph['id'])}**")
+                                else:
+                                    _wfcol.markdown(f"⬜ {_wficon} {_wfph.get('name', _wfph['id'])}")
+
+                        if _wfr.phase_log:
+                            st.markdown("**Laatste uitvoer:**")
+                            st.markdown(_wfr.phase_log[-1].get("output", "")[:3000])
+
+                        _wf_art_keys = [k for k in _wfr.artifacts if k != "input"]
+                        if _wf_art_keys:
+                            with st.expander("📦 Artifacts"):
+                                for _wfk in _wf_art_keys:
+                                    st.markdown(f"**{_wfk}:**")
+                                    st.markdown(str(_wfr.artifacts[_wfk])[:1000])
+
+                        if _wfr.status == STATUS_WAITING:
+                            st.markdown("---")
+                            _wf_feedback = st.text_area(
+                                "Feedback (optioneel)",
+                                key=f"wf_feedback_{_wfr.run_id}",
+                                placeholder="Bijsturing voor de volgende fase...",
+                                height=80,
+                            )
+                            _wfc1, _wfc2 = st.columns(2)
+                            with _wfc1:
+                                if st.button("✅ Goedkeuren & doorgaan",
+                                             key=f"wf_approve_{_wfr.run_id}", type="primary"):
+                                    with st.spinner("Volgende fase uitvoeren..."):
+                                        try:
+                                            _wf_advance(_wfr.run_id, _wf_feedback, _wf_pp)
+                                            st.rerun()
+                                        except Exception as _wfe:
+                                            st.error(f"❌ {_wfe}")
+                            with _wfc2:
+                                if st.button("❌ Annuleren", key=f"wf_cancel_{_wfr.run_id}"):
+                                    _wf_cancel(_wfr.run_id, _wf_pp)
+                                    st.rerun()
+
+        # ── Sectie 3: Templates ────────────────────────────────
+        else:
+            st.markdown("### 📚 Workflow-templates")
+            _wf_tmpl_list = _wf_list_templates(_wf_pp)
+            if not _wf_tmpl_list:
+                st.info("Geen templates gevonden.")
+            else:
+                for _wft in _wf_tmpl_list:
+                    with st.expander(f"**{_wft['name']}** (`{_wft['id']}`)", expanded=False):
+                        st.caption(_wft["description"])
+                        st.caption(f"📍 Bron: `{_wft['source']}`")
+                        try:
+                            from regian.core.workflow import load_workflow as _wf_lw
+                            _wftdata = _wf_lw(_wft["id"], _wf_pp)
+                            for _wfpi2, _wfph2 in enumerate(_wftdata.get("phases", []), 1):
+                                _wfico2 = _wfph2.get("icon", "📋")
+                                _wfreq = "⏸️ goedkeuring" if _wfph2.get("require_approval") or _wfph2.get("type") == "human_checkpoint" else ""
+                                st.markdown(f"{_wfpi2}. {_wfico2} **{_wfph2.get('name', _wfph2['id'])}** `{_wfph2.get('type', '')}` {_wfreq}")
+                        except Exception:
+                            pass
+                        if st.button(f"📤 Exporteer als BPMN", key=f"wf_export_{_wft['id']}"):
+                            from regian.skills.workflow import export_bpmn as _wf_expbpmn
+                            st.success(_wf_expbpmn(_wft["id"]))
+
+            st.markdown("---")
+            st.markdown("### ➕ Nieuw template genereren")
+            _wf_new_name = st.text_input("Template-naam (technisch, bijv. code_review)", key="wf_new_name")
+            _wf_new_desc = st.text_area("Beschrijving", key="wf_new_desc", height=80,
+                                         placeholder="Wat doet deze workflow?")
+            if st.button("🧠 Genereer template via LLM", key="wf_gen_btn"):
+                if not _wf_new_name.strip() or not _wf_new_desc.strip():
+                    st.warning("Vul naam en beschrijving in.")
+                else:
+                    with st.spinner("Template genereren..."):
+                        from regian.skills.workflow import create_workflow_template as _wf_cwt
+                        st.success(_wf_cwt(_wf_new_name.strip(), _wf_new_desc.strip()))
+                        st.rerun()
+
+            st.markdown("---")
+            st.markdown("### 📥 BPMN importeren")
+            _wf_bpmn_path = st.text_input("Pad naar .bpmn XML-bestand", key="wf_bpmn_path",
+                                           placeholder="bijv. mijn_flow.bpmn")
+            if st.button("📥 Importeer BPMN", key="wf_bpmn_import_btn"):
+                if not _wf_bpmn_path.strip():
+                    st.warning("Voer een bestandspad in.")
+                else:
+                    from regian.skills.workflow import import_bpmn as _wf_ibpmn
+                    _wf_imp = _wf_ibpmn(_wf_bpmn_path.strip())
+                    (st.success if "✅" in _wf_imp else st.error)(_wf_imp)
+                    if "✅" in _wf_imp:
+                        st.rerun()
 
 
 if __name__ == "__main__":

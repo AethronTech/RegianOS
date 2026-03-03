@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.0.10 · **Datum:** 1 maart 2026  
-**Status:** Milestone 1.0.10 — Intern document
+**Versie:** 1.1.0 · **Datum:** 1 maart 2026  
+**Status:** Milestone 1.1.0 — Intern document
 
 ---
 
@@ -457,6 +457,79 @@ elif provider == "nieuwe_provider":
 
 ---
 
+## 13. Workflow-engine (Milestone 1.1.0)
+
+### 13.1 Architectuur
+
+```
+regian/core/workflow.py        ← engine, state, fase-uitvoering
+regian/skills/workflow.py      ← publieke slash-commands
+regian/workflows/*.json        ← ingebouwde templates
+<project>/.regian_workflow/    ← projectspecifieke templates
+<project>/.regian_workflow_state/ ← run-state (JSON)
+```
+
+### 13.2 WorkflowRun dataklasse
+
+```python
+@dataclass
+class WorkflowRun:
+    run_id:               str       # 8-karakter UUID-prefix
+    workflow_id:          str       # template-ID
+    workflow_name:        str
+    started_at:           str       # ISO 8601
+    updated_at:           str
+    status:               str       # running | waiting | done | cancelled | error
+    current_phase_index:  int
+    artifacts:            dict      # output_key → waarde
+    phase_log:            list      # logboek per fase
+    input:                str       # originele gebruikersinvoer
+    project_path:         str
+```
+
+### 13.3 Fase-uitvoering
+
+De `execute_phase(run, phase)` functie dispatcht op `phase["type"]`:
+
+| Type | Handler | Output |
+|---|---|---|
+| `llm_prompt` | `_run_llm_prompt()` | LLM-response string |
+| `task_loop` | `_run_task_loop()` | Geaggregeerde taakresultaten |
+| `human_checkpoint` | direct | Prompt-tekst, `needs_approval=True` |
+| `tool_chain` | `_run_tool_chain()` | Geconcateneerde tool-resultaten |
+
+### 13.4 _advance-loop
+
+De interne `_advance(run, template)` functie itereert over de fasen:
+
+```
+while current_phase_index < len(phases):
+    output, needs_approval = execute_phase(run, phase)
+    if needs_approval:
+        run.status = STATUS_WAITING
+        save_run(run)
+        return run   ← pauze
+    current_phase_index += 1
+run.status = STATUS_DONE
+```
+
+### 13.5 Template-substitutie
+
+`_render_template(template, artifacts)` vervangt `{{sleutel}}`-patronen met waarden uit het `artifacts`-dict. Onbekende placeholders blijven ongewijzigd.
+
+### 13.6 BPMN-mapping
+
+| BPMN-element | Fase-type |
+|---|---|
+| `serviceTask` | `llm_prompt` |
+| `userTask` | `human_checkpoint` |
+| `scriptTask` | `tool_chain` |
+| `callActivity` | `task_loop` |
+
+Import loopt via `xml.etree.ElementTree`; sequence flows bepalen de fase-volgorde. Export genereert valide BPMN 2.0 XML met DI-annotaties voor bpmn.io.
+
+---
+
 ## 12. Bekende beperkingen (Milestone 1)
 
 | Beperking | Beschrijving |
@@ -468,4 +541,4 @@ elif provider == "nieuwe_provider":
 
 ---
 
-*Regian OS — Milestone 1.0.10 · Intern document · 1 maart 2026*
+*Regian OS — Milestone 1.1.0 · Intern document · 1 maart 2026*

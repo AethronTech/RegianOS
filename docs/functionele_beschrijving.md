@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.0.10 · **Datum:** 1 maart 2026  
-**Status:** Milestone 1.0.10 — Intern document
+**Versie:** 1.1.0 · **Datum:** 1 maart 2026  
+**Status:** Milestone 1.1.0 — Intern document
 
 ---
 
@@ -266,11 +266,59 @@ Geen configuratie, geen registratie — het systeem ontdekt de skill automatisch
 
 ## 7. Kwaliteit en betrouwbaarheid
 
-- **Testdekking**: ≥ 80% (330 tests, geautomatiseerd via pytest)
+- **Testdekking**: ≥ 80% (389 tests, geautomatiseerd via pytest)
 - **Logretentie**: maximaal 500 entries (oudste worden automatisch verwijderd)
 - **Timeout**: shell-commando's worden na 30 seconden afgebroken
 - **Path-traversal**: bestands-skills blokkeren paden buiten de werkmap
 
 ---
 
-*Regian OS — Milestone 1.0.10 · Intern document · 1 maart 2026*
+## 8. Workflow-systeem (nieuw in 1.1.0)
+
+### 8.1 Concept
+
+Het workflow-systeem stelt gebruikers in staat om **meerstappe-processen** te definiëren en automatisch uit te voeren. Een workflow bestaat uit een geordende reeks fasen van vier typen:
+
+- `llm_prompt` — AI-aanroep met template-substitutie
+- `task_loop` — iteratief uitvoeren van een takenlijst via de agent
+- `human_checkpoint` — pauze voor menselijke goedkeuring (HITL)
+- `tool_chain` — deterministisch uitvoeren van een reeks tools
+
+### 8.2 Fase-artefacten
+
+Elke fase kan zijn uitvoer opslaan als een **artifact** (sleutel-waarde-paar). Latere fasen kunnen via `{{sleutel}}`-substitutie de uitvoer van vorige fasen als invoer gebruiken. Zo ontstaat een **datapijplijn** binnen de workflow.
+
+### 8.3 State-beheer
+
+De status van een workflow-run wordt na elke fase opgeslagen op disk (`<project>/.regian_workflow_state/<run_id>.json`). Runs kunnen na een onderbreking worden voortgezet.
+
+### 8.4 Template-systeem
+
+Templates worden gezocht in prioriteitsvolgorde:
+1. `<project>/.regian_workflow/<naam>.json`
+2. `<root>/.regian_workflow/<naam>.json`
+3. `regian/workflows/<naam>.json` (ingebouwde templates)
+
+Ingebouwde template: `van_idee_tot_mvp` (4 fasen: PRD → taken → implementatie → review).
+
+### 8.5 BPMN-compatibiliteit
+
+Workflows kunnen worden geïmporteerd vanuit en geëxporteerd naar BPMN 2.0 XML-bestanden (compatibel met [bpmn.io](https://bpmn.io)).
+
+### 8.6 Beschikbare slash-commands
+
+| Command | Functie |
+|---|---|
+| `/list_workflows` | Alle beschikbare templates |
+| `/list_workflow_runs` | Alle actieve en afgeronde runs |
+| `/start_workflow <naam> <invoer>` | Start een workflow |
+| `/workflow_status <run_id>` | Status en artifacts van een run |
+| `/approve_workflow <run_id>` | Keur een fase goed en ga door |
+| `/cancel_workflow <run_id>` | Annuleer een actieve run |
+| `/create_workflow_template <naam> <beschrijving>` | LLM genereert een template |
+| `/import_bpmn <pad>` | Importeer BPMN XML naar workflow-JSON |
+| `/export_bpmn <naam>` | Exporteer workflow naar BPMN XML |
+
+---
+
+*Regian OS — Milestone 1.1.0 · Intern document · 1 maart 2026*

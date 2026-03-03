@@ -1,0 +1,43 @@
+{
+  "id": "van_idee_tot_mvp",
+  "name": "Van Idee tot MVP",
+  "description": "Begeleidt een idee van specificatie tot werkend prototype in 4 fasen: Product Architect → Lead Developer → AI Agent Implementatie → Review.",
+  "version": "1.0",
+  "phases": [
+    {
+      "id": "architect",
+      "name": "Product Architect",
+      "type": "llm_prompt",
+      "icon": "🏛️",
+      "system_prompt": "Je bent een ervaren Product Architect. Wees concreet en beknopt. Antwoord in het Nederlands.",
+      "prompt_template": "Je bent een Product Architect. Analyseer dit idee en genereer een Product Requirement Document (PRD):\n\n**Idee:** {{input}}\n\nGenereer het volgende:\n\n## 1. MVP-scope\nWat zit WEL in de MVP? (max 5 features)\nWat valt BUITEN de MVP? (explicit out-of-scope)\n\n## 2. Functionele eisen\n(max 10 bullets, elk beginnend met een werkwoord)\n\n## 3. Technische stack\n- Backend:\n- Frontend:\n- Opslag:\n- Deployment:\n\n## 4. Acceptatiecriteria\nHoe weet je dat de MVP klaar is? (max 5 testbare criteria)",
+      "output_key": "prd",
+      "require_approval": true
+    },
+    {
+      "id": "breakdown",
+      "name": "Lead Developer — Taakopsplitsing",
+      "type": "llm_prompt",
+      "icon": "📋",
+      "system_prompt": "Je bent een Lead Developer. Splits werk op in atoomtaken: klein genoeg voor één AI-agent-uitvoering. Antwoord in het Nederlands.",
+      "prompt_template": "Je bent een Lead Developer. Zet onderstaande PRD om in een geordende lijst van atoomtaken.\n\nRegels voor atoomtaken:\n- Elke taak is in één AI-uitvoering voltooibaar\n- Concreet en actionable (bijv. 'Maak bestand X met functie Y')\n- Gebouwd op de vorige taak\n- Start met scaffolding, eindig met integratie\n\n**PRD:**\n{{prd}}\n\nGeef een genummerde lijst. Voeg per taak toe: wat er gemaakt wordt en welk bestand.",
+      "output_key": "task_list",
+      "require_approval": true
+    },
+    {
+      "id": "implement",
+      "name": "AI Agent — Implementatie",
+      "type": "task_loop",
+      "icon": "⚙️",
+      "source_key": "task_list",
+      "require_approval": true
+    },
+    {
+      "id": "review",
+      "name": "Review & Iteratie",
+      "type": "human_checkpoint",
+      "icon": "🔍",
+      "prompt": "## 🔍 Review\n\nDe implementatiefase is afgerond. Controleer het resultaat:\n\n**PRD:**\n{{prd}}\n\n**Uitgevoerde taken:**\n{{task_list}}\n\nBeslis:\n- ✅ Goedkeuren → de workflow wordt afgesloten\n- 🔄 Bijsturen → voeg feedback toe en de agent herstart de implementatie\n- ❌ Annuleren → stop"
+    }
+  ]
+}
