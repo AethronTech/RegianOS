@@ -458,6 +458,17 @@ def _append_msg(role: str, content: str, badge=None) -> None:
     _save_chat_history(st.session_state.messages)
 
 
+def _copy_cb(text: str) -> None:
+    """Callback: zet tekst klaar voor kopiëren naar klembord."""
+    st.session_state["_pending_copy"] = text
+
+
+def _edit_cb(idx: int, text: str) -> None:
+    """Callback: activeer edit-modus voor bericht op index idx."""
+    st.session_state["_edit_idx"] = idx
+    st.session_state["_edit_text"] = text
+
+
 # ── Uploads automatisch opslaan ───────────────────────────────────────────────
 
 def _uploads_dir() -> "Path":
@@ -760,6 +771,23 @@ def start_gui():
 
         confirm_set = CONFIRM_REQUIRED()
 
+        # ── Kopiëren naar klembord (JS, vanuit on_click callback) ─────────────
+        if st.session_state.get("_pending_copy"):
+            _cp_text = st.session_state["_pending_copy"]
+            st.session_state["_pending_copy"] = None
+            _components.html(
+                "<script>(function(){var t=window.parent.document"
+                ".createElement('textarea');t.value="
+                + json.dumps(_cp_text)
+                + ";t.style.cssText='position:fixed;opacity:0;top:0;left:0';"
+                "window.parent.document.body.appendChild(t);"
+                "t.focus();t.select();"
+                "try{window.parent.document.execCommand('copy');}catch(e){}"
+                "window.parent.document.body.removeChild(t);"
+                "})();</script>",
+                height=0,
+            )
+
         # ── HITL: bevestiging afwachten ────────────────────────
         if st.session_state.pending_plan is not None:
             plan = st.session_state.pending_plan
@@ -767,15 +795,23 @@ def start_gui():
             # Toon chatgeschiedenis als context
             _avatar = get_user_avatar()
             _agent_name = get_agent_name()
-            for message in st.session_state.messages:
+            for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "user":
                     with st.chat_message("user", avatar=_avatar):
                         st.markdown(message["content"])
+                        _bc1, _bc2 = st.columns([1, 9])
+                        with _bc1:
+                            st.button("📋", key=f"hcp_u_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
                 else:
                     with st.chat_message(_agent_name, avatar="🤖"):
                         if message.get("badge"):
                             st.info(f"Direct: {message['badge']}")
                         st.markdown(message["content"])
+                        _bc1, _bc2 = st.columns([1, 9])
+                        with _bc1:
+                            st.button("📋", key=f"hcp_a_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
 
             st.warning("⚠️ **Bevestiging vereist** — dit plan bevat destructieve operaties:")
             for i, step in enumerate(plan, 1):
@@ -813,23 +849,72 @@ def start_gui():
             # ── Normale chat ───────────────────────────────────────
             _avatar = get_user_avatar()
             _agent_name = get_agent_name()
-            for message in st.session_state.messages:
+            for i, message in enumerate(st.session_state.messages):
                 if message["role"] == "user":
                     with st.chat_message("user", avatar=_avatar):
                         st.markdown(message["content"])
+                        _bc1, _bc2, _bc3 = st.columns([1, 1, 8])
+                        with _bc1:
+                            st.button("📋", key=f"cp_u_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
+                        with _bc2:
+                            st.button("✏️", key=f"ed_{i}", help="Bewerken en opnieuw uitvoeren",
+                                      on_click=_edit_cb, args=(i, message["content"]))
                 else:
                     with st.chat_message(_agent_name, avatar="🤖"):
                         if message.get("badge"):
                             st.info(f"Direct: {message['badge']}")
                         st.markdown(message["content"])
+                        _bc1, _bc2 = st.columns([1, 9])
+                        with _bc1:
+                            st.button("📋", key=f"cp_a_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
 
-            if prompt := st.chat_input(
-                "Wat gaan we doen? (Typ / voor directe commands)",
-                accept_file="multiple",
-                file_type=_UPLOAD_FILE_TYPES,
-            ):
+            # ── Edit-modus ─────────────────────────────────────────────────────
+            _edit_pending = st.session_state.get("_edit_idx") is not None
+            if _edit_pending:
+                _ei = st.session_state["_edit_idx"]
+                st.info(f"✏️ **Bericht #{_ei + 1} bewerken** — wijzig hieronder en klik Uitvoeren:")
+                _edit_val = st.text_area(
+                    "Bericht",
+                    value=st.session_state.get("_edit_text", ""),
+                    key="_edit_ta",
+                    height=80,
+                    label_visibility="collapsed",
+                )
+                _ec1, _ec2 = st.columns(2)
+                with _ec1:
+                    if st.button("▶️ Uitvoeren", type="primary", use_container_width=True):
+                        st.session_state.messages = st.session_state.messages[:_ei]
+                        _save_chat_history(st.session_state.messages)
+                        st.session_state["_edit_idx"] = None
+                        st.session_state["_edit_text"] = None
+                        st.session_state["_queued_prompt"] = _edit_val.strip()
+                        st.rerun()
+                with _ec2:
+                    if st.button("✖️ Annuleren", use_container_width=True):
+                        st.session_state["_edit_idx"] = None
+                        st.session_state["_edit_text"] = None
+                        st.rerun()
+
+            # ── Chat-input of queued prompt (vanuit edit-submit) ────────────────
+            _queued_prompt = st.session_state.get("_queued_prompt")
+            if _queued_prompt:
+                del st.session_state["_queued_prompt"]
+            if not _edit_pending and not _queued_prompt:
+                prompt = st.chat_input(
+                    "Wat gaan we doen? (Typ / voor directe commands)",
+                    accept_file="multiple",
+                    file_type=_UPLOAD_FILE_TYPES,
+                )
+            else:
+                prompt = None
+            if _queued_prompt or prompt:
                 # Haal tekst en bestanden op (ChatInputValue óf plain string)
-                if isinstance(prompt, str):
+                if _queued_prompt:
+                    typed_prompt = _queued_prompt
+                    uploaded_files: list = []
+                elif isinstance(prompt, str):
                     typed_prompt = prompt
                     uploaded_files: list = []
                 else:
