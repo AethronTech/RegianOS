@@ -194,7 +194,9 @@ def import_bpmn(xml_path: str) -> str:
     }
 
     # Bepaal het process-element (neemt de eerste)
-    process = root.find(".//bpmn:process", ns) or root.find(".//process")
+    process = root.find(".//bpmn:process", ns)
+    if process is None:
+        process = root.find(".//process")
     if process is None:
         return "❌ Geen BPMN-process element gevonden in het XML-bestand."
 
