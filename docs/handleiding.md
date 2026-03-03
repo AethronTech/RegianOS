@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.1.6 · **Datum:** 3 maart 2026
+**Versie:** 1.1.8 · **Datum:** 3 maart 2026
 
 ---
 
@@ -75,7 +75,11 @@ Geef me een overzicht van alle bestanden in de werkmap
 1. Je typt een opdracht → het LLM maakt een **stappenplan** (één of meerdere tool-calls)  
 2. Bevat het plan gevaarlijke stappen? → **HITL-scherm** verschijnt ter bevestiging  
 3. Je bevestigt (of annuleert) → Regian voert de stappen één voor één uit  
-4. Het resultaat verschijnt in de chat
+4. Tussen elke stap verschijnt een **voortgangsbalk** en een **⏹️ Stop**-knop  
+5. Het resultaat verschijnt in de chat
+
+**Stop-knop tijdens uitvoering**  
+Zodra een meerstappenplan start, verschijnt bovenaan de chat een voortgangsbalk met een **⏹️ Stop uitvoering**-knop. Klik hierop om de uitvoering te onderbreken na de lopende stap. Al uitgevoerde stappen worden bewaard in het antwoord.
 
 ### Bestanden bijvoegen
 
@@ -109,6 +113,17 @@ Via het paperclip-icoon (📎) naast het invoerveld kun je rechtstreeks bestande
 | 🟢 Stap | Veilige stap in HITL-overzicht |
 | 🔴 Stap | Gevaarlijke stap die bevestiging vereist |
 
+### Berichten kopiëren en bewerken
+
+Elk bericht toont knoppen zodra het zichtbaar is:
+
+**Op antwoorden van Regian (🤖):**
+- **📋** — kopieert de volledige tekst van het antwoord naar het klembord
+
+**Op jouw vragen:**
+- **📋** — kopieert de vraagtekst naar het klembord
+- **✏️** — opent een bewerkingsveld met de originele vraag; pas aan en klik **▶️ Uitvoeren** om de vraag opnieuw te sturen (de chat wordt teruggespoeld naar dat punt). Klik **✖️ Annuleren** om te sluiten zonder wijziging.
+
 ### Voortgangsindicatoren
 
 Tijdens het verwerken van een vraag toont de agent genummerde stappen:
@@ -128,7 +143,8 @@ Elke LLM-respons (analyse, samenvatting, plan-uitvoer) wordt automatisch bewaard
 
 Je chatgeschiedenis wordt **automatisch bewaard** tussen sessies. Bij het opnieuw openen van de Cockpit zie je jouw vorige berichten terug.
 
-- De geschiedenis is **per project** gescheiden: wisselen van actief project laadt de bijbehorende chatlog
+- De geschiedenis is **per project** gescheiden: wisselen van actief project laadt automatisch de chatlog van dat project
+- Bij het wisselen van project via de zijbalk worden de berichten direct vervangen door de chat van het nieuwe project
 - Klik op **🗑️ Reset Chat** in de zijbalk om de chatgeschiedenis te wissen (zowel uit sessie als van schijf)
 - Chatbestanden worden opgeslagen als `.regian_chat.json` in de projectmap of werkmap-root
 
@@ -582,4 +598,4 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.1.6 · 3 maart 2026*
+*Regian OS — Milestone 1.1.8 · 3 maart 2026*

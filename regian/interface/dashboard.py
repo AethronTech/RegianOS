@@ -682,6 +682,8 @@ def start_gui():
             st.session_state.active_project = _selected
         get_orchestrator.clear()
         get_agent.clear()
+        # Wis chatgeschiedenis zodat de chat van het nieuwe project geladen wordt
+        st.session_state.pop("messages", None)
         st.rerun()
 
     if st.sidebar.button("🗑️ Reset Chat", use_container_width=True):
@@ -768,6 +770,12 @@ def start_gui():
             st.session_state.messages = _load_chat_history()
         if "pending_plan" not in st.session_state:
             st.session_state.pending_plan = None
+        if "_exec_plan" not in st.session_state:
+            st.session_state._exec_plan = None
+            st.session_state._exec_idx = 0
+            st.session_state._exec_results = []
+            st.session_state._exec_n = 0
+            st.session_state._exec_gid = None
 
         confirm_set = CONFIRM_REQUIRED()
 
@@ -844,6 +852,77 @@ def start_gui():
                     _append_msg("assistant", "❌ Opdracht geannuleerd.")
                     st.session_state.pending_plan = None
                     st.rerun()
+
+        elif st.session_state.get("_exec_plan"):
+            # ── Stapsgewijze uitvoering (stop-knop ondersteund) ────
+            _exec_p = st.session_state._exec_plan
+            _exec_i = st.session_state._exec_idx
+            _exec_n = st.session_state._exec_n
+            _exec_gid = st.session_state._exec_gid
+            _avatar = get_user_avatar()
+            _agent_name = get_agent_name()
+
+            # Toon bestaande berichten
+            for i, message in enumerate(st.session_state.messages):
+                if message["role"] == "user":
+                    with st.chat_message("user", avatar=_avatar):
+                        st.markdown(message["content"])
+                        _bc1, _bc2, _bc3 = st.columns([1, 1, 8])
+                        with _bc1:
+                            st.button("📋", key=f"ecp_u_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
+                        with _bc2:
+                            st.button("✏️", key=f"eed_{i}", help="Bewerken",
+                                      on_click=_edit_cb, args=(i, message["content"]))
+                else:
+                    with st.chat_message(_agent_name, avatar="🤖"):
+                        if message.get("badge"):
+                            st.info(f"Direct: {message['badge']}")
+                        st.markdown(message["content"])
+                        _bc1, _bc2 = st.columns([1, 9])
+                        with _bc1:
+                            st.button("📋", key=f"ecp_a_{i}", help="Kopiëren",
+                                      on_click=_copy_cb, args=(message["content"],))
+
+            # Voortgangsbalk + stop-knop
+            st.progress(_exec_i / _exec_n,
+                        text=f"▶️ Uitvoeren... stap {_exec_i}/{_exec_n}")
+            if st.button("⏹️ Stop uitvoering", type="secondary"):
+                partial = "\n\n".join(st.session_state._exec_results)
+                stopped_msg = (
+                    partial + f"\n\n⏹️ **Gestopt na stap {_exec_i} van {_exec_n}.**"
+                ) if partial else "⏹️ **Gestopt door gebruiker.**"
+                _append_msg("assistant", stopped_msg)
+                st.session_state._exec_plan = None
+                st.session_state._exec_idx = 0
+                st.session_state._exec_results = []
+                st.session_state._exec_n = 0
+                st.rerun()
+
+            if _exec_i < _exec_n:
+                step = _exec_p[_exec_i]
+                tool_name = step.get("tool", "")
+                args = step.get("args", {})
+                with st.spinner(f"▶️ Stap {_exec_i + 1}/{_exec_n}: `{tool_name}`..."):
+                    result = registry.call(tool_name, args)
+                log_action(tool_name, args, result, source="chat", group_id=_exec_gid)
+                _prev = result[:120] + ("…" if len(result) > 120 else "")
+                st.toast(f"✅ {tool_name}: {_prev}")
+                st.session_state._exec_results.append(f"✅ **{tool_name}**: {result}")
+                st.session_state._exec_idx += 1
+                st.rerun()
+            else:
+                response = "\n\n".join(st.session_state._exec_results)
+                _append_msg("assistant", response)
+                try:
+                    _saved_path = _save_result(response)
+                except Exception:
+                    pass
+                st.session_state._exec_plan = None
+                st.session_state._exec_idx = 0
+                st.session_state._exec_results = []
+                st.session_state._exec_n = 0
+                st.rerun()
 
         else:
             # ── Normale chat ───────────────────────────────────────
@@ -1023,35 +1102,18 @@ def start_gui():
                                 n = len(plan)
                                 st.write(f"📋 **{n} stap{'pen' if n > 1 else ''} gepland**")
                                 for i, step in enumerate(plan, 1):
-                                    _icon = "🔴" if _step_needs_confirm(step, confirm_set) else "⚙️"
-                                    st.write(f"{_icon} Stap {i}/{n}: `{step.get('tool', '')}`")
-                                _status.update(label=f"🚀 Uitvoeren ({n} stap{'pen' if n > 1 else ''})...", state="running")
-
-                                # ── Fase 2: Stap-voor-stap uitvoeren ──────────────
-                                step_results = []
-                                for i, step in enumerate(plan, 1):
-                                    tool_name = step.get("tool", "")
-                                    args = step.get("args", {})
-                                    st.write(f"▶️ Stap {i}/{n}: `{tool_name}`...")
-                                    result = registry.call(tool_name, args)
-                                    log_action(tool_name, args, result, source="chat", group_id=gid)
-                                    preview = result[:120] + ("…" if len(result) > 120 else "")
-                                    st.write(f"   ✅ {preview}")
-                                    step_results.append(f"✅ **{tool_name}**: {result}")
-
-                                response = "\n\n".join(step_results)
+                                    st.write(f"⚙️ Stap {i}/{n}: `{step.get('tool', '')}`")
                                 _status.update(
-                                    label=f"✅ {n} stap{'pen' if n > 1 else ''} uitgevoerd",
-                                    state="complete",
-                                    expanded=False,
+                                    label=f"🚀 {n} stap{'pen' if n > 1 else ''} gepland, uitvoering start...",
+                                    state="complete", expanded=False,
                                 )
-                                st.markdown(response)
-                                try:
-                                    _saved_path = _save_result(response)
-                                    st.caption(f"💾 Opgeslagen als `results/{_saved_path.name}`")
-                                except Exception:
-                                    pass
-                                _append_msg("assistant", response)
+                                # Plan opslaan voor stapsgewijze uitvoering (stop-knop ondersteund)
+                                st.session_state._exec_plan = plan
+                                st.session_state._exec_idx = 0
+                                st.session_state._exec_gid = gid
+                                st.session_state._exec_results = []
+                                st.session_state._exec_n = n
+                                st.rerun()
 
                             elif not plan and not dangerous:
                                 response = get_orchestrator(st.session_state.active_project).run(effective_prompt)
