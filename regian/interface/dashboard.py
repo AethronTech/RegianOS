@@ -803,6 +803,9 @@ def start_gui():
     _NO_PROJECT = "(geen project)"
     _selector_options = [_NO_PROJECT] + _proj_names
     _current_selection = _active_proj_now if _active_proj_now in _proj_names else _NO_PROJECT
+    # Sync session state als project hernoemd werd via chat (buiten de selectbox om)
+    if st.session_state.get("sidebar_project_select", _current_selection) != _current_selection:
+        st.session_state["sidebar_project_select"] = _current_selection
     _selected = st.sidebar.selectbox(
         "📁 Project",
         _selector_options,
@@ -1976,6 +1979,50 @@ def start_gui():
         # ── Sectie 2: Actieve runs ─────────────────────────────
         elif wf_sub == "📋 Actieve runs":
             st.markdown("### 📋 Actieve runs")
+
+            # Multi-rerun fase-voor-fase na Goedkeuren
+            if "_wf_adv_id" in st.session_state:
+                _adv_id = st.session_state["_wf_adv_id"]
+                _adv_pp = st.session_state.get("_wf_adv_pp", _wf_pp)
+                try:
+                    _adv_run = _wf_load_run(_adv_id, _adv_pp)
+                    _adv_phases = _get_phases(_adv_run)
+                    _adv_total = len(_adv_phases)
+                    _adv_cur = _adv_run.current_phase_index
+                    _adv_name = (
+                        _adv_phases[_adv_cur].get("name", f"Fase {_adv_cur + 1}")
+                        if _adv_cur < _adv_total else "Afronden"
+                    )
+                    st.info(
+                        f"▶️ **Fase {_adv_cur + 1}/{_adv_total} uitvoeren:** {_adv_name}…",
+                        icon="⚙️",
+                    )
+                    try:
+                        _adv_run = _wf_advance_one(_adv_id, _adv_pp)
+                        if _adv_run.status == STATUS_RUNNING:
+                            st.rerun()
+                        elif _adv_run.status == STATUS_WAITING:
+                            del st.session_state["_wf_adv_id"]
+                            st.session_state.pop("_wf_adv_pp", None)
+                            st.toast("⏸️ Volgende checkpoint — jouw goedkeuring is vereist.")
+                            st.rerun()
+                        elif _adv_run.status == STATUS_DONE:
+                            del st.session_state["_wf_adv_id"]
+                            st.session_state.pop("_wf_adv_pp", None)
+                            st.toast("🎉 Workflow voltooid!")
+                            st.rerun()
+                        else:  # ERROR of onbekend
+                            del st.session_state["_wf_adv_id"]
+                            st.session_state.pop("_wf_adv_pp", None)
+                            st.rerun()
+                    except Exception as _adv_err:
+                        st.error(f"❌ Fout tijdens uitvoering: {_adv_err}")
+                        del st.session_state["_wf_adv_id"]
+                        st.session_state.pop("_wf_adv_pp", None)
+                except Exception:
+                    del st.session_state["_wf_adv_id"]
+                    st.session_state.pop("_wf_adv_pp", None)
+
             _wf_runs = _wf_list_runs(_wf_pp)
             if not _wf_runs:
                 st.info("Geen workflow-runs gevonden voor dit project.")
@@ -2045,13 +2092,8 @@ def start_gui():
                             with _wfc1:
                                 if st.button("✅ Goedkeuren & doorgaan",
                                              key=f"wf_approve_{_wfr.run_id}", type="primary"):
-                                    with st.spinner("Volgende fase uitvoeren..."):
-                                        try:
-                                            _wf_advance(_wfr.run_id, _wf_feedback, _wf_pp)
-                                            st.toast("✅ Fase goedgekeurd, volgende fase gestart.")
-                                        except Exception as _wfe:
-                                            st.error(f"❌ {_wfe}")
-                                            st.stop()
+                                    st.session_state["_wf_adv_id"] = _wfr.run_id
+                                    st.session_state["_wf_adv_pp"] = _wf_pp
                                     st.rerun()
                             with _wfc2:
                                 if _wf_feedback.strip():
