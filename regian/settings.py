@@ -255,3 +255,32 @@ def clear_active_project():
     """Verwijder het actieve project (geen actief project meer)."""
     set_key(str(ENV_FILE), "ACTIVE_PROJECT", "")
     os.environ["ACTIVE_PROJECT"] = ""
+
+
+# ── Backup Settings ────────────────────────────────────────────
+
+_DEFAULT_BACKUP_MAX_COUNT = 5
+
+def get_backup_max_count() -> int:
+    """Geeft het maximum aantal te bewaren backups (standaard: 5)."""
+    try:
+        return int(os.getenv("BACKUP_MAX_COUNT", str(_DEFAULT_BACKUP_MAX_COUNT)))
+    except (ValueError, TypeError):
+        return _DEFAULT_BACKUP_MAX_COUNT
+
+def set_backup_max_count(n: int):
+    """Sla het maximum aantal te bewaren backups op in .env."""
+    set_key(str(ENV_FILE), "BACKUP_MAX_COUNT", str(int(n)))
+    os.environ["BACKUP_MAX_COUNT"] = str(int(n))
+
+def get_backup_dir() -> str:
+    """Geeft de map waar backups worden opgeslagen (standaard: RegianBackups naast de werkmap)."""
+    default = str(Path(get_root_dir()).parent / "RegianBackups")
+    return os.getenv("BACKUP_DIR", default)
+
+def set_backup_dir(path: str) -> str:
+    """Sla de backup-map op in .env."""
+    resolved = str(Path(path).expanduser().resolve())
+    set_key(str(ENV_FILE), "BACKUP_DIR", resolved)
+    os.environ["BACKUP_DIR"] = resolved
+    return resolved

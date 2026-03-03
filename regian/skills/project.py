@@ -97,6 +97,7 @@ def create_project(
     # Manifest schrijven
     manifest = {
         "name": safe_name,
+        "display_name": name.strip(),
         "type": project_type,
         "path": str(project_path),
         "git_repo": git_repo.strip(),
@@ -235,6 +236,7 @@ def rename_project(old_name: str, new_name: str) -> str:
     # 2. Manifest bijwerken
     manifest = json.loads((new_path / _MANIFEST).read_text(encoding="utf-8"))
     manifest["name"] = safe_new
+    manifest["display_name"] = new_name.strip()
     manifest["path"] = str(new_path)
     (new_path / _MANIFEST).write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"

@@ -107,6 +107,7 @@ Alle instellingen zijn aanpasbaar via de ⚙️-tab en worden persistent opgesla
 - Max. tekens per log-resultaat (`LOG_RESULT_MAX_CHARS`, standaard 300)
 - Naam van het actie-logbestand (`LOG_FILE_NAME`, standaard `regian_action_log.jsonl`)
 - Naam van het jobs-bestand (`JOBS_FILE_NAME`, standaard `regian_jobs.json`)
+- Backup-instellingen: max. te bewaren backups (`BACKUP_MAX_COUNT`, standaard 5) en backup-map (`BACKUP_DIR`, standaard `RegianBackups/` naast de werkmap)
 
 ### 3.9 HITL — Human-in-the-Loop
 
@@ -252,6 +253,7 @@ Bestaande skill-modules op Milestone 1.0.5:
 | `help` | Hulp en documentatie | 1 |
 | `project` | Projectbeheer en -context | 6 |
 | `knowledge` | Kennisbank-beheer | 4 |
+| `backup` | Werkmap backup & restore | 3 |
 
 ---
 

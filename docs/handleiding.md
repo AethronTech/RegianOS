@@ -276,6 +276,17 @@ Typ `/` in het chatvenster om de autocomplete-dropdown te activeren met een voll
 
 > Kennisbestanden worden bewaard in `<project>/.regian_knowledge/` en worden automatisch bij elke LLM-opdracht als achtergrondcontext meegegeven.
 
+#### 💾 Backup
+
+| Command | Beschrijving |
+|---|---|
+| `/backup_workspace()` | Maakt een zip-backup van de volledige werkmap |
+| `/list_backups()` | Toont alle beschikbare backups met datum en grootte |
+| `/restore_workspace(backup_name)` | Herstelt de werkmap vanuit een backup |
+
+> Backups worden opgeslagen in `RegianBackups/` naast de werkmap (configureerbaar). Het maximum aantal te bewaren backups is instelbaar in de **⚙️ Instellingen**-tab (standaard: 5).  
+> Stel een automatische dagelijkse backup in via de **📅 Cron**-tab: schema `dagelijks om 02:00`, commando `/backup_workspace`.
+
 ---
 
 ## Cron — Geplande Taken
@@ -403,6 +414,15 @@ Maximale aantal LLM-rondes dat de agent mag doen per opdracht. Standaard **5**. 
 - **Jobs-bestand** — Naam van het JSON-bestand met geplande taken. Standaard `regian_jobs.json`.
 
 Beide bestanden worden opgeslagen in de RegianOS-projectroot (naast `main.py`). Herstart Regian na een naamswijziging om het nieuwe bestand te gebruiken.
+
+### 💾 Backup
+
+- **Max. te bewaren backups** — Maximum aantal zip-backups dat wordt bijgehouden. Oudste worden automatisch verwijderd. Standaard **5**.
+- **Backup-map** — Map waar backups worden opgeslagen. Standaard `RegianBackups/` naast de werkmap.
+- **Nu backup maken** — Knop om direct een backup te starten.
+- **Backups bekijken** — Toont lijst van beschikbare backups.
+
+> **Tip:** Maak een dagelijkse automatische backup via de **📅 Cron**-tab met schema `dagelijks om 02:00` en commando `/backup_workspace`.
 
 ---
 

@@ -34,6 +34,8 @@ from regian.settings import (
     get_gemini_models, set_gemini_models,
     get_ollama_models, set_ollama_models,
     _DEFAULT_GEMINI_MODELS, _DEFAULT_OLLAMA_MODELS,
+    get_backup_max_count, set_backup_max_count,
+    get_backup_dir, set_backup_dir,
 )
 import uuid
 from regian.core.action_log import log_action, get_log, get_log_grouped, clear_log, log_count
@@ -482,7 +484,9 @@ _TYPE_ICONS_SIDEBAR = {"software": "💻", "docs": "📄", "data": "📊", "gene
 
 
 def _load_project_list() -> list[dict]:
-    """Laad alle projectmanifesten uit de werkmap (directe scan, geen skill-import)."""
+    """Laad alle projectmanifesten uit de werkmap (directe scan, geen skill-import).
+    Injecteert '_folder' (mapnaam) en 'display_name' (leesbare naam) in elke entry.
+    """
     root = Path(get_root_dir())
     projects = []
     if root.exists():
@@ -490,7 +494,11 @@ def _load_project_list() -> list[dict]:
             mp = entry / ".regian_project.json"
             if entry.is_dir() and mp.exists():
                 try:
-                    projects.append(json.loads(mp.read_text(encoding="utf-8")))
+                    data = json.loads(mp.read_text(encoding="utf-8"))
+                    data["_folder"] = entry.name
+                    if not data.get("display_name"):
+                        data["display_name"] = data["name"].replace("_", " ")
+                    projects.append(data)
                 except (json.JSONDecodeError, OSError):
                     pass
     return projects
@@ -764,11 +772,15 @@ def start_gui():
     _start_scheduler()  # start achtergrond-scheduler éénmalig
     _active_proj_now = get_active_project()
     _proj_type_icon = ""
+    _active_display_name = ""
     if _active_proj_now:
         _all_manifests = _load_project_list()
-        _active_manifest = next((p for p in _all_manifests if p["name"] == _active_proj_now), None)
+        _active_manifest = next(
+            (p for p in _all_manifests if p.get("_folder", p["name"]) == _active_proj_now), None
+        )
         if _active_manifest:
             _proj_type_icon = _TYPE_ICONS_SIDEBAR.get(_active_manifest.get("type", ""), "📁")
+            _active_display_name = _active_manifest.get("display_name") or _active_proj_now.replace("_", " ")
 
     st.sidebar.markdown(
         f"""
@@ -790,7 +802,7 @@ def start_gui():
   </div>
   {f'''<div style="font-size:0.8rem;background:#1a2a1a;border:1px solid #2a4a2a;
                border-radius:6px;padding:4px 8px;color:#7ddb7d;">
-    {_proj_type_icon} <strong>{_active_proj_now}</strong>
+    {_proj_type_icon} <strong>{_active_display_name}</strong>
   </div>''' if _active_proj_now else ''}
 </div>
 """,
@@ -799,31 +811,35 @@ def start_gui():
 
     # ── Project selector ──────────────────────────────────────
     _all_projects = _load_project_list()
-    _proj_names = [p["name"] for p in _all_projects]
+    _proj_folders = [p.get("_folder", p["name"]) for p in _all_projects]
+    _proj_labels  = [p.get("display_name") or p["name"].replace("_", " ") for p in _all_projects]
+    _folder_to_label = dict(zip(_proj_folders, _proj_labels))
+    _label_to_folder = dict(zip(_proj_labels, _proj_folders))
     _NO_PROJECT = "(geen project)"
-    _selector_options = [_NO_PROJECT] + _proj_names
-    _current_selection = _active_proj_now if _active_proj_now in _proj_names else _NO_PROJECT
+    _current_label = _folder_to_label.get(_active_proj_now, _NO_PROJECT)
+    _selector_options = [_NO_PROJECT] + _proj_labels
     # Sync session state als project hernoemd werd via chat (buiten de selectbox om)
-    if st.session_state.get("sidebar_project_select", _current_selection) != _current_selection:
-        st.session_state["sidebar_project_select"] = _current_selection
+    if st.session_state.get("sidebar_project_select", _current_label) != _current_label:
+        st.session_state["sidebar_project_select"] = _current_label
     _selected = st.sidebar.selectbox(
         "📁 Project",
         _selector_options,
-        index=_selector_options.index(_current_selection),
+        index=_selector_options.index(_current_label),
         key="sidebar_project_select",
         label_visibility="collapsed",
     )
-    if _selected != _current_selection:
+    if _selected != _current_label:
         if _selected == _NO_PROJECT:
             clear_active_project()
             st.session_state.active_project = ""
         else:
+            _sel_folder = _label_to_folder.get(_selected, _selected)
             from regian.settings import set_active_project as _sap
-            _sap(_selected)
+            _sap(_sel_folder)
             # activeer ook het manifest-vlag
             from regian.skills.project import activate_project as _ap
-            _ap(_selected)
-            st.session_state.active_project = _selected
+            _ap(_sel_folder)
+            st.session_state.active_project = _sel_folder
         get_orchestrator.clear()
         get_agent.clear()
         # Wis chatgeschiedenis zodat de chat van het nieuwe project geladen wordt
@@ -1875,7 +1891,47 @@ def start_gui():
 
         st.markdown("---")
 
-        # 11. Projectbeheer — hernoemen
+        # 11. Backup instellingen
+        st.markdown("### 💾 Backup")
+        st.caption(
+            "Maak een zip-backup van de volledige werkmap. "
+            "Stel een dagelijkse backup in via de **Cron**-tab met schema `dagelijks om 02:00` en commando `/backup_workspace`."
+        )
+        _bk_col1, _bk_col2 = st.columns(2)
+        with _bk_col1:
+            _bk_max = st.number_input(
+                "Max. te bewaren backups",
+                min_value=1, max_value=100,
+                value=get_backup_max_count(),
+                step=1,
+                key="settings_backup_max",
+            )
+        with _bk_col2:
+            _bk_dir = st.text_input(
+                "Backup-map",
+                value=get_backup_dir(),
+                key="settings_backup_dir",
+            )
+        _bk_c1, _bk_c2, _bk_c3 = st.columns(3)
+        with _bk_c1:
+            if st.button("💾 Backup instellingen opslaan", key="save_backup_settings"):
+                set_backup_max_count(int(_bk_max))
+                set_backup_dir(_bk_dir.strip())
+                st.success("✅ Backup-instellingen opgeslagen.")
+        with _bk_c2:
+            if st.button("📦 Nu backup maken", key="backup_now_btn"):
+                with st.spinner("Backup aan het maken…"):
+                    from regian.skills.backup import backup_workspace as _do_backup
+                    _bk_result = _do_backup()
+                st.info(_bk_result)
+        with _bk_c3:
+            if st.button("📋 Backups bekijken", key="list_backups_btn"):
+                from regian.skills.backup import list_backups as _lb
+                st.info(_lb())
+
+        st.markdown("---")
+
+        # 12. Projectbeheer — hernoemen
         st.markdown("### 📁 Projectbeheer")
         _pm_all_projects = []
         _pm_root = Path(get_root_dir())

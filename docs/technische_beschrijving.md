@@ -71,6 +71,7 @@ RegianOS/
 │       ├── help.py                # Help skill
         ├── project.py             # Projectbeheer skills
         ├── knowledge.py           # Kennisbank-beheer skills
+        └── backup.py              # Backup & restore skills
         └── skills.py              # Skillet meta-skill
 └── tests/
     ├── conftest.py                # Fixtures: tmp_root, isolate_env
@@ -313,6 +314,8 @@ Alle configuratie wordt opgeslagen in `.env` via `python-dotenv`. De module bied
 | `LOG_RESULT_MAX_CHARS` | `get/set_log_result_max_chars` | `300` |
 | `LOG_FILE_NAME` | `get/set_log_file_name` | `regian_action_log.jsonl` |
 | `JOBS_FILE_NAME` | `get/set_jobs_file_name` | `regian_jobs.json` |
+| `BACKUP_MAX_COUNT` | `get/set_backup_max_count` | `5` |
+| `BACKUP_DIR` | `get/set_backup_dir` | `RegianBackups/` naast werkmap |
 | `GITHUB_TOKEN` | direct via `os.getenv` | – |
 | `GOOGLE_API_KEY` | direct via `os.getenv` | – |
 | `ACTIVE_PROJECT` | `get/set_active_project`, `clear_active_project` | `""` |
@@ -342,6 +345,7 @@ Setters gebruiken `dotenv.set_key()` voor persistentie én `os.environ[...]` voo
 | `settings.py` | ~98% |
 | `skills/project.py` | ~96% |
 | `skills/knowledge.py` | ~85% |
+| `skills/backup.py` | ~87% |
 | `skills/*.py` (overige) | ~80–93% |
 | **Totaal** | **81.48%** |
 
