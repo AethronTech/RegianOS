@@ -2349,7 +2349,7 @@ def start_gui():
                                         _port = next(g for g in _port_match.groups() if g)
                                 except Exception:
                                     pass
-                            st.link_button(f"🌐 Open localhost:{_port}", f"http://localhost:{_port}")
+                            st.link_button(f"🌐 Open 127.0.0.1:{_port}", f"http://127.0.0.1:{_port}")
                         with _term_col:
                             st.code(f"cd {_pp_run}\n{_run_cmd}", language="bash")
                     else:
