@@ -1,7 +1,7 @@
 {
   "id": "van_idee_tot_mvp",
   "name": "Van Idee tot MVP",
-  "description": "Begeleidt een idee van specificatie tot werkend prototype in 4 fasen: Product Architect → Lead Developer → AI Agent Implementatie → Review.",
+  "description": "Begeleidt een idee van specificatie tot werkend prototype in 5 fasen: Product Architect → Lead Developer → AI Agent Implementatie → Test & Validatie → Review.",
   "version": "1.0",
   "phases": [
     {
@@ -20,7 +20,7 @@
       "type": "llm_prompt",
       "icon": "📋",
       "system_prompt": "Je bent een Lead Developer. Splits werk op in atoomtaken: klein genoeg voor één AI-agent-uitvoering. Antwoord in het Nederlands.",
-      "prompt_template": "Je bent een Lead Developer. Zet onderstaande PRD om in een geordende lijst van atoomtaken.\n\nRegels voor atoomtaken:\n- Elke taak is in één AI-uitvoering voltooibaar\n- Concreet en actionable (bijv. 'Maak bestand X met functie Y')\n- Gebouwd op de vorige taak\n- Start met scaffolding, eindig met integratie\n\n**PRD:**\n{{prd}}\n\nGeef een genummerde lijst. Voeg per taak toe: wat er gemaakt wordt en welk bestand.",
+      "prompt_template": "Je bent een Lead Developer. Zet onderstaande PRD om in een geordende lijst van atoomtaken.\n\nVERPLICHTE STRUCTUUR — houd je hier altijd aan:\n1. **Taak 1 is altijd: Project setup & testrunner**\n   - Initialiseer het project (npm init / venv / etc.)\n   - Installeer én configureer een werkende testrunner (bijv. Jest, Vitest, pytest, Mocha)\n   - Maak een werkend test-skelet aan zodat `npm test` / `pytest` zonder fouten draait\n   - Maak een `build.sh` of equivalente run-instructies aan\n2. **Tussenliggende taken: implementeer features** (één bestand / één functie per taak)\n3. **Laatste 2–3 taken zijn altijd testen**\n   - Schrijf unit-testen voor elke publieke functie / component\n   - Zorg dat alle testen slagen vóór afronding\n\nOverige regels:\n- Elke taak is in één AI-uitvoering voltooibaar\n- Concreet en actionable (bijv. 'Maak bestand X met functie Y')\n- Gebouwd op de vorige taak\n\n**PRD:**\n{{prd}}\n\nGeef een genummerde lijst. Voeg per taak toe: wat er gemaakt wordt en welk bestand.",
       "output_key": "task_list",
       "require_approval": true
     },
@@ -33,11 +33,18 @@
       "require_approval": true
     },
     {
+      "id": "test_validatie",
+      "name": "Test & Validatie",
+      "type": "human_checkpoint",
+      "icon": "🧪",
+      "prompt": "## 🧪 Test & Validatie\n\nDe implementatie is klaar. Voer nu de testen uit via **▶️ Project uitvoeren** in het workflow-scherm.\n\n**Stappen:**\n1. Ga naar het tabblad **▶️ Project uitvoeren**\n2. Kies de testoptie (bijv. `npm test` of `pytest`) en voer uit\n3. Zijn er falende testen of bugs? Maak een ticket aan via **🐛 Tickets** (de AI fixt ze automatisch)\n4. Zijn alle testen groen? Keur dan goed om door te gaan naar Review\n\n**Uitgevoerde taken:**\n{{task_list}}\n\nKeur goed als alle testen slagen, of stuur bij met een lijst van gevonden problemen."
+    },
+    {
       "id": "review",
       "name": "Review & Iteratie",
       "type": "human_checkpoint",
       "icon": "🔍",
-      "prompt": "## 🔍 Review\n\nDe implementatiefase is afgerond. Controleer het resultaat:\n\n**PRD:**\n{{prd}}\n\n**Uitgevoerde taken:**\n{{task_list}}\n\nBeslis:\n- ✅ Goedkeuren → de workflow wordt afgesloten\n- 🔄 Bijsturen → voeg feedback toe en de agent herstart de implementatie\n- ❌ Annuleren → stop"
+      "prompt": "## 🔍 Review\n\nTesten zijn geslaagd. Beoordeel nu het eindresultaat:\n\n**PRD:**\n{{prd}}\n\n**Uitgevoerde taken:**\n{{task_list}}\n\nBeslis:\n- ✅ Goedkeuren → de workflow wordt afgesloten\n- 🔄 Bijsturen → voeg feedback toe en de agent herstart de implementatie\n- ❌ Annuleren → stop"
     }
   ]
 }
