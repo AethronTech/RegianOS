@@ -2031,7 +2031,7 @@ def start_gui():
                     _wfbadge = {"running": "🔄", "waiting": "⏸️", "done": "✅",
                                 "cancelled": "❌", "error": "💥"}.get(_wfr.status, "❓")
                     with st.expander(
-                        f"{_wfbadge} `{_wfr.run_id}` — **{_wfr.workflow_name}** — {_wfr.started_at[:16]}",
+                        f"{_wfbadge} **{_wfr.workflow_name}** — {_wfr.started_at[:16]} · `{_wfr.run_id[:8]}`",
                         expanded=(_wfr.status in (STATUS_WAITING, STATUS_RUNNING)),
                     ):
                         _wf_phases = _get_phases(_wfr)
