@@ -1991,7 +1991,8 @@ def start_gui():
 
         wf_sub = st.radio(
             "Sectie",
-            ["▶️ Starten", "📋 Actieve runs", "📚 Templates", "✏️ Visuele editor"],
+            ["▶️ Starten", "📋 Actieve runs", "� Tickets", "▶️ Project uitvoeren",
+             "�📚 Templates", "✏️ Visuele editor"],
             horizontal=True,
             label_visibility="collapsed",
             key="wf_sub",
@@ -2254,8 +2255,241 @@ def start_gui():
                     if "✅" in _wf_imp:
                         st.rerun()
 
-        # ── Sectie 4: Visuele editor ───────────────────────────
-        else:
+        # ── Sectie 4: Project uitvoeren ────────────────────────
+        elif wf_sub == "▶️ Project uitvoeren":
+            st.markdown("### ▶️ Project uitvoeren")
+            import subprocess as _wfsp
+
+            _pp_run = _wf_pp
+            if not _pp_run:
+                st.info("Geen actief project. Activeer een project via de zijbalk.")
+            else:
+                from pathlib import Path as _wfPath
+                _pp_path = _wfPath(_pp_run)
+
+                # ── Detecteer run-scripts ─────────────────────
+                _run_options = []
+                if (_pp_path / "build.sh").exists():
+                    _run_options.append(("🔨 build.sh", "bash build.sh", False))
+                if (_pp_path / "dev.sh").exists():
+                    _run_options.append(("🚀 dev.sh", "bash dev.sh", False))
+                if (_pp_path / "start.sh").exists():
+                    _run_options.append(("▶️ start.sh", "bash start.sh", False))
+                if (_pp_path / "Makefile").exists():
+                    _run_options.append(("⚙️ make", "make", False))
+                if (_pp_path / "package.json").exists():
+                    try:
+                        import json as _rj
+                        _pkg = _rj.loads((_pp_path / "package.json").read_text())
+                        _scripts = _pkg.get("scripts", {})
+                        if "build" in _scripts:
+                            _run_options.append(("📦 npm run build", "npm run build", False))
+                        if "dev" in _scripts:
+                            _run_options.append(("🚀 npm run dev", "npm run dev", True))
+                        elif "start" in _scripts:
+                            _run_options.append(("▶️ npm start", "npm start", True))
+                        if "test" in _scripts:
+                            _run_options.append(("🧪 npm test", "npm test -- --watchAll=false", False))
+                    except Exception:
+                        pass
+                if (_pp_path / "requirements.txt").exists():
+                    _run_options.append(("🧪 pytest", "python -m pytest", False))
+                    if (_pp_path / "main.py").exists():
+                        _run_options.append(("▶️ python main.py", "python main.py", True))
+
+                if not _run_options:
+                    st.info("Geen bekende run-scripts gevonden. Voeg een `build.sh` of `package.json` toe.")
+                    if st.button("🔨 Maak build.sh aan", key="wf_mk_build"):
+                        from regian.core.agent import OrchestratorAgent as _wfOrch
+                        with st.spinner("build.sh genereren..."):
+                            _wfoa = _wfOrch()
+                            _wfbr = _wfoa.run(
+                                f"Maak een passend build.sh en/of start script aan voor het project op `{_pp_run}`. "
+                                "Kijk naar de bestaande bestanden (package.json, requirements.txt, main.py, etc.) "
+                                "en schrijf een script dat het project bouwt en/of start."
+                            )
+                        st.success(_wfbr)
+                        st.rerun()
+                else:
+                    _run_labels = [o[0] for o in _run_options]
+                    _run_sel_label = st.selectbox("Kies actie", _run_labels, key="wf_run_sel")
+                    _run_sel = _run_options[_run_labels.index(_run_sel_label)]
+                    _run_label, _run_cmd, _run_is_server = _run_sel
+
+                    st.code(f"$ {_run_cmd}", language="bash")
+
+                    if _run_is_server:
+                        # Live-server: toon commando + link, start niet automatisch
+                        st.info(
+                            f"⚠️ **{_run_label}** start een live server. "
+                            "Klik hieronder om het in een terminal te openen, of start het handmatig."
+                        )
+                        _url_col, _term_col = st.columns(2)
+                        with _url_col:
+                            _port = "3000" if "react" in _run_cmd.lower() or "next" in _run_cmd.lower() else "5173" if "vite" in _run_cmd.lower() else "8080"
+                            st.link_button(f"🌐 Open localhost:{_port}", f"http://localhost:{_port}")
+                        with _term_col:
+                            st.code(f"cd {_pp_run}\n{_run_cmd}", language="bash")
+                    else:
+                        if st.button(f"▶️ Uitvoeren: {_run_label}",
+                                     key="wf_run_exec", type="primary"):
+                            with st.spinner(f"{_run_label} uitvoeren..."):
+                                try:
+                                    _proc = _wfsp.run(
+                                        _run_cmd, shell=True, cwd=_pp_run,
+                                        capture_output=True, text=True, timeout=120,
+                                    )
+                                    _rc = _proc.returncode
+                                    _out = _proc.stdout + _proc.stderr
+                                    if _rc == 0:
+                                        st.success(f"✅ Geslaagd (exit 0)")
+                                    else:
+                                        st.error(f"❌ Exit code {_rc}")
+                                    with st.expander("📄 Output", expanded=(_rc != 0)):
+                                        st.code(_out[:8000], language="bash")
+                                except _wfsp.TimeoutExpired:
+                                    st.warning("⏱️ Timeout (>120s) — mogelijk een live server?")
+                                except Exception as _wfre:
+                                    st.error(f"❌ {_wfre}")
+
+        # ── Sectie 5: Tickets (Kanban) ────────────────────────
+        elif wf_sub == "🐛 Tickets":
+            from regian.skills.tickets import (
+                create_ticket as _tk_create,
+                list_tickets as _tk_list,
+                move_ticket as _tk_move,
+                delete_ticket as _tk_del,
+                fix_ticket as _tk_fix,
+                fix_all_tickets as _tk_fix_all,
+                _tickets_file as _tk_file,
+                _load as _tk_load,
+                STATUSES as _TK_STATUSES,
+            )
+
+            st.markdown("### 🐛 Tickets — Kanban")
+
+            _tk_f = _tk_file()
+            if _tk_f is None:
+                st.info("Geen actief project. Activeer een project via de zijbalk.")
+            else:
+                from pathlib import Path as _tkPath
+                _tk_all = _tk_load(_tkPath(str(_tk_f)))
+                _tk_todo   = [t for t in _tk_all if t["status"] == "todo"]
+                _tk_inprog = [t for t in _tk_all if t["status"] == "in_progress"]
+                _tk_review = [t for t in _tk_all if t["status"] == "review"]
+                _tk_done   = [t for t in _tk_all if t["status"] == "done"]
+
+                # Fix-all knop bovenaan
+                _tk_top1, _tk_top2 = st.columns([3, 1])
+                with _tk_top1:
+                    st.caption(
+                        f"📋 {len(_tk_todo)} to do  ·  "
+                        f"🔄 {len(_tk_inprog)} in progress  ·  "
+                        f"👀 {len(_tk_review)} review  ·  "
+                        f"✅ {len(_tk_done)} done"
+                    )
+                with _tk_top2:
+                    if _tk_todo and st.button(
+                        f"🤖 Fix alle ({len(_tk_todo)})", key="tk_fix_all_btn",
+                        type="primary", use_container_width=True
+                    ):
+                        with st.spinner("AI aan het werk..."):
+                            _tk_fix_all()
+                        st.rerun()
+
+                st.markdown("---")
+                _tkc1, _tkc2, _tkc3, _tkc4 = st.columns(4)
+
+                # ── TO DO ──────────────────────────────────────
+                with _tkc1:
+                    st.markdown("**📋 To Do**")
+                    with st.expander("➕ Nieuw ticket", expanded=(len(_tk_all) == 0)):
+                        _tk_nt = st.text_input("Titel", key="tk_new_title",
+                                               placeholder="Korte beschrijving...")
+                        _tk_nd = st.text_area("Beschrijving", key="tk_new_desc",
+                                              height=80,
+                                              placeholder="Stappen, verwacht gedrag, etc.")
+                        if st.button("➕ Aanmaken", key="tk_new_btn",
+                                     use_container_width=True):
+                            if _tk_nt.strip():
+                                _tk_create(_tk_nt.strip(), _tk_nd.strip())
+                                st.rerun()
+                            else:
+                                st.warning("Voer een titel in.")
+                    for _tkt in _tk_todo:
+                        with st.container(border=True):
+                            st.markdown(f"**{_tkt['title']}**")
+                            st.caption(f"`{_tkt['id']}` · {_tkt['updated_at'][:10]}")
+                            if _tkt.get("description"):
+                                st.caption(_tkt["description"][:120])
+                            _tkb1, _tkb2 = st.columns(2)
+                            if _tkb1.button("🤖 Fix", key=f"tk_fix_{_tkt['id']}",
+                                            use_container_width=True):
+                                with st.spinner(f"AI werkt aan '{_tkt['title']}'..."):
+                                    _tk_fix(_tkt["id"])
+                                st.rerun()
+                            if _tkb2.button("🗑️", key=f"tk_del_{_tkt['id']}",
+                                            use_container_width=True):
+                                _tk_del(_tkt["id"])
+                                st.rerun()
+
+                # ── IN PROGRESS ────────────────────────────────
+                with _tkc2:
+                    st.markdown("**🔄 In Progress**")
+                    if not _tk_inprog:
+                        st.caption("_Geen tickets bezig_")
+                    for _tkt in _tk_inprog:
+                        with st.container(border=True):
+                            st.markdown(f"**{_tkt['title']}**")
+                            st.caption(f"`{_tkt['id']}` · AI is bezig...")
+                            st.progress(0.5, text="AI verwerkt...")
+
+                # ── REVIEW ─────────────────────────────────────
+                with _tkc3:
+                    st.markdown("**👀 Review**")
+                    if not _tk_review:
+                        st.caption("_Niets te reviewen_")
+                    for _tkt in _tk_review:
+                        with st.container(border=True):
+                            st.markdown(f"**{_tkt['title']}**")
+                            st.caption(f"`{_tkt['id']}` · {_tkt['updated_at'][:10]}")
+                            if _tkt.get("ai_output"):
+                                with st.expander("🤖 AI uitvoer", expanded=False):
+                                    st.markdown(_tkt["ai_output"][:600])
+                            _tkr1, _tkr2 = st.columns(2)
+                            if _tkr1.button("✅ Done", key=f"tk_done_{_tkt['id']}",
+                                            use_container_width=True, type="primary"):
+                                _tk_move(_tkt["id"], "done")
+                                st.rerun()
+                            _tk_back_key = f"tk_back_comment_{_tkt['id']}"
+                            _tk_back_cmt = st.text_input(
+                                "Opmerking", key=_tk_back_key,
+                                placeholder="Wat klopt er niet?",
+                                label_visibility="collapsed",
+                            )
+                            if _tkr2.button("🔙 To Do", key=f"tk_back_{_tkt['id']}",
+                                            use_container_width=True):
+                                _tk_move(_tkt["id"], "todo",
+                                         comment=_tk_back_cmt or "Terug voor aanpassing")
+                                st.rerun()
+
+                # ── DONE ───────────────────────────────────────
+                with _tkc4:
+                    st.markdown("**✅ Done**")
+                    if not _tk_done:
+                        st.caption("_Nog niets afgerond_")
+                    for _tkt in _tk_done:
+                        with st.container(border=True):
+                            st.markdown(f"~~{_tkt['title']}~~")
+                            st.caption(f"`{_tkt['id']}` · {_tkt['updated_at'][:10]}")
+                            if st.button("🔙", key=f"tk_undone_{_tkt['id']}",
+                                         help="Terug naar To Do",
+                                         use_container_width=True):
+                                _tk_move(_tkt["id"], "todo")
+                                st.rerun()
+
+        # ── Sectie 6: Visuele editor ───────────────────────────
+        elif wf_sub == "✏️ Visuele editor":
             st.markdown("### ✏️ Visuele workflow-editor")
             import json as _wfjson
 

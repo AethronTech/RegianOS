@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.1.17 · **Datum:** 3 maart 2026
+**Versie:** 1.1.18 · **Datum:** 3 maart 2026
 
 ---
 
@@ -613,6 +613,67 @@ Via het dashboard (LLM-generator) of via slash-command:
 
 Of maak een `.json`-bestand aan in `<werkmap>/.regian_workflow/mijn_workflow.json`.
 
+---
+
+## 12. Tickets — Kanban bugtracker
+
+Na de implementatiefase vind je in het workflow-scherm de tab **🐛 Tickets**. Dit is een Kanban-board voor bugrapportage en AI-gestuurde bugfixes.
+
+### 12.1 Het Kanban-board
+
+| Kolom | Betekenis |
+|---|---|
+| 📋 **To Do** | Jij plaatst hier bugs en verbeterpunten |
+| 🔄 **In Progress** | De AI-agent werkt aan de fix |
+| 👀 **Review** | Fix klaar — jij test |
+| ✅ **Done** | Goedgekeurd |
+
+### 12.2 Bug doorgeven
+
+1. Open **🔄 Workflows → 🐛 Tickets**
+2. Klik **➕ Nieuw ticket** in de To Do-kolom
+3. Vul een korte titel in + beschrijving (stappen om te reproduceren, verwacht gedrag)
+4. Klik **➕ Aanmaken**
+
+### 12.3 AI laten fixen
+
+- **🤖 Fix** op één ticket: de agent lost dit ene probleem op
+- **🤖 Fix alle (X)** bovenaan: alle To Do-tickets worden sequentieel opgelost
+
+Tijdens de fix zie je het ticket in **🔄 In Progress**. Na afloop verschijnt het in **👀 Review**.
+
+### 12.4 Beoordelen
+
+In de Review-kolom per ticket:
+- **✅ Done** — goedgekeurd, klaar
+- **🔙 To Do** + optionele opmerking — terugsturen met context (de AI gebruikt deze opmerking bij een tweede poging)
+
+### 12.5 Via slash-command
+
+```
+/create_ticket "Knop slaat op maar reloaded pagina" "Bij klikken op Opslaan-knop refresht de browser in plaats van lokaal op te slaan"
+/fix_all_tickets
+/list_tickets review
+```
+
+---
+
+## 13. Project uitvoeren
+
+Via **🔄 Workflows → ▶️ Project uitvoeren** start je je project zonder de Regian-interface te verlaten.
+
+Regian detecteert automatisch aanwezige scripts:
+- `build.sh`, `dev.sh`, `start.sh`
+- `Makefile` → `make`
+- `package.json` → npm scripts (build, dev, start, test)
+- `requirements.txt` / `main.py` → pytest / python main.py
+
+Voor build/test-scripts: klik **▶️ Uitvoeren** — de output verschijnt in een uitklapbaar venster.
+
+Voor live servers (npm dev, npm start): Regian toont het commando + een **🌐 Open localhost**-knop. Start de server handmatig in een terminal (Regian zelf stopt tijdens uitvoering).
+
+Geen scripts gevonden? Klik **🔨 Maak build.sh aan** — de AI genereert een passend script op basis van de projectstructuur.
+
 ### 11.6 BPMN import/export
 
 Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
@@ -622,4 +683,4 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.1.17 · 3 maart 2026*
+*Regian OS — Milestone 1.1.18 · 3 maart 2026*

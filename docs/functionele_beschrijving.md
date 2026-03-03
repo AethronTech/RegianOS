@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.1.17 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.17 — Intern document
+**Versie:** 1.1.18 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.18 — Intern document
 
 ---
 
@@ -277,7 +277,7 @@ Geen configuratie, geen registratie — het systeem ontdekt de skill automatisch
 
 ---
 
-## 8. Workflow-systeem (nieuw in 1.1.17)
+## 8. Workflow-systeem (nieuw in 1.1.18)
 
 ### 8.1 Concept
 
@@ -333,4 +333,63 @@ De run-weergave toont per run:
 
 ---
 
-*Regian OS — Milestone 1.1.17 · Intern document · 3 maart 2026*
+## 9. Ticket-systeem — Kanban (nieuw in 1.1.18)
+
+Het ticket-systeem biedt een Kanban-gebaseerde bugtracker die volledig geïntegreerd is in het workflow-scherm. Tickets worden opgeslagen per project in `<project>/.regian_tickets.json`.
+
+### 9.1 Kolommen
+
+| Kolom | Status | Beschrijving |
+|---|---|---|
+| 📋 To Do | `todo` | Nieuw aangemaakt door gebruiker |
+| 🔄 In Progress | `in_progress` | AI is bezig met de fix |
+| 👀 Review | `review` | AI-fix klaar, gebruiker test |
+| ✅ Done | `done` | Goedgekeurd door gebruiker |
+
+### 9.2 Workflow
+
+1. Gebruiker maakt ticket aan (titel + beschrijving met stappen/verwacht gedrag)
+2. Klik **🤖 Fix** op een ticket of **🤖 Fix alle** voor de volledige To Do-kolom
+3. Agent voert de fix uit: `todo → in_progress → review`
+4. Gebruiker test het resultaat en klikt **✅ Done** of **🔙 To Do** met opmerking
+5. Bij terugplaatsing kan de AI de opmerking gebruiken als context voor een tweede poging
+
+### 9.3 Beschikbare slash-commands
+
+| Command | Functie |
+|---|---|
+| `/create_ticket <titel> <beschrijving>` | Nieuw ticket aanmaken |
+| `/list_tickets [status]` | Tickets weergeven, optioneel gefilterd |
+| `/move_ticket <id> <status> [opmerking]` | Ticket verplaatsen |
+| `/fix_ticket <id>` | AI-agent lost dit ticket op |
+| `/fix_all_tickets` | Alle To Do-tickets laten oplossen |
+| `/delete_ticket <id>` | Ticket verwijderen |
+
+---
+
+## 10. Project uitvoeren (nieuw in 1.1.18)
+
+Vanuit het **🔄 Workflows → ▶️ Project uitvoeren**-scherm kunnen build- en runscripts van het actieve project worden uitgevoerd zonder de Regian-interface te verlaten.
+
+### 10.1 Detectie
+
+Regian detecteert automatisch:
+- `build.sh`, `dev.sh`, `start.sh`
+- `Makefile` (`make`)
+- `package.json` → npm scripts (`build`, `dev`, `start`, `test`)
+- `requirements.txt` + optioneel `main.py` → `pytest` / `python main.py`
+
+### 10.2 Uitvoermodi
+
+| Mode | Gedrag |
+|---|---|
+| **Build/test** | Wordt synchroon uitgevoerd (timeout 120s), output getoond in expander |
+| **Live server** (npm dev, npm start, python main.py) | Niet automatisch gestart; toont commando + localhost-link |
+
+### 10.3 Automatisch aanmaken
+
+Als er geen script gevonden wordt: de knop **🔨 Maak build.sh aan** laat de AI een passend script genereren op basis van de projectbestanden.
+
+---
+
+*Regian OS — Milestone 1.1.18 · Intern document · 3 maart 2026*

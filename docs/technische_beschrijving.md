@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.1.17 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.17 — Intern document
+**Versie:** 1.1.18 · **Datum:** 3 maart 2026  
+**Status:** Milestone 1.1.18 — Intern document
 
 ---
 
@@ -71,7 +71,8 @@ RegianOS/
 │       ├── help.py                # Help skill
         ├── project.py             # Projectbeheer skills
         ├── knowledge.py           # Kennisbank-beheer skills
-        └── backup.py              # Backup & restore skills
+        ├── backup.py              # Backup & restore skills
+        ├── tickets.py             # Kanban ticketsysteem (Milestone 1.1.18)
         └── skills.py              # Skillet meta-skill
 └── tests/
     ├── conftest.py                # Fixtures: tmp_root, isolate_env
@@ -347,10 +348,11 @@ Setters gebruiken `dotenv.set_key()` voor persistentie én `os.environ[...]` voo
 | `skills/knowledge.py` | ~85% |
 | `skills/backup.py` | ~87% |
 | `skills/files.py` | ~87% |
+| `skills/tickets.py` | ~67% |
 | `skills/*.py` (overige) | ~80–93% |
 | **Totaal** | **≥80%** |
 
-434 tests, allemaal passend. Drempel: `--cov-fail-under=80`. Uitvoeren:
+457 tests, allemaal passend. Drempel: `--cov-fail-under=80`. Uitvoeren:
 
 ```bash
 pytest --cov=regian --cov-report=html
@@ -462,7 +464,7 @@ elif provider == "nieuwe_provider":
 
 ---
 
-## 13. Workflow-engine (Milestone 1.1.17)
+## 13. Workflow-engine (Milestone 1.1.18)
 
 ### 13.1 Architectuur
 
@@ -535,6 +537,52 @@ Import loopt via `xml.etree.ElementTree`; sequence flows bepalen de fase-volgord
 
 ---
 
+## 14. Ticket-systeem (Milestone 1.1.18)
+
+### 14.1 Module `regian/skills/tickets.py`
+
+Kanban-gebaseerde bugtracker per project. Tickets worden opgeslagen als JSON-array in `<project>/.regian_tickets.json`.
+
+**Datastructuur per ticket:**
+```json
+{
+  "id": "a1b2c3d4",
+  "title": "...",
+  "description": "...",
+  "status": "todo|in_progress|review|done",
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601",
+  "ai_output": "...",
+  "comments": [{"text": "...", "at": "...", "from": "user|ai"}]
+}
+```
+
+**Publieke functies (slash-commands + LLM-tools):**
+
+| Functie | Beschrijving |
+|---|---|
+| `create_ticket(title, description)` | Nieuw ticket aanmaken in To Do |
+| `list_tickets(status)` | Tickets tonen, optioneel gefilterd |
+| `move_ticket(id, status, comment)` | Ticket verplaatsen, optioneel met opmerking |
+| `delete_ticket(id)` | Ticket permanent verwijderen |
+| `fix_ticket(id)` | AI-agent lost ticket op: `todo → in_progress → review` |
+| `fix_all_tickets()` | Alle To Do-tickets sequentieel laten fixen |
+
+**Integratie:** `fix_ticket()` importeert `OrchestratorAgent` lazy (uit `regian.core.agent`) om circulaire imports te vermijden. De agent bouwt een taakbeschrijving op basis van `title`, `description` en de laatste `comment`, en slaat de eerste 2000 tekens van de uitvoer op als `ai_output`.
+
+### 14.2 Dashboard: `🐛 Tickets`-tab
+
+Visueel Kanban-board met 4 kolommen in het workflow-scherm. Knop **🤖 Fix alle** triggert `fix_all_tickets()` met `st.spinner`.
+
+### 14.3 Dashboard: `▶️ Project uitvoeren`-tab
+
+Detecteert build/run-scripts in het actieve projectpad en biedt:
+- Synchrone uitvoering (build, test, make) met `subprocess.run(timeout=120)`
+- Live-server modus (npm dev, npm start, python main.py): toont commando + localhost-link zonder automatisch te starten
+- Fallback: AI genereert een `build.sh` via `OrchestratorAgent`
+
+---
+
 ## 12. Bekende beperkingen (Milestone 1)
 
 | Beperking | Beschrijving |
@@ -546,4 +594,4 @@ Import loopt via `xml.etree.ElementTree`; sequence flows bepalen de fase-volgord
 
 ---
 
-*Regian OS — Milestone 1.1.17 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.1.18 · Intern document · 3 maart 2026*
