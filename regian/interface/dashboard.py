@@ -2456,24 +2456,32 @@ def start_gui():
                         st.rerun()
 
                 st.markdown("---")
+
+                # ── Nieuw ticket formulier ─────────────────────────────
+                with st.expander("➕ Nieuw ticket aanmaken", expanded=(len(_tk_all) == 0)):
+                    with st.form("tk_new_form", clear_on_submit=True):
+                        _tk_nt = st.text_input("Titel", placeholder="Korte beschrijving...")
+                        _tk_nd = st.text_area("Beschrijving", height=80,
+                                              placeholder="Stappen, verwacht gedrag, etc.")
+                        _tk_submitted = st.form_submit_button("➕ Aanmaken",
+                                                              use_container_width=True,
+                                                              type="primary")
+                    if _tk_submitted:
+                        if _tk_nt.strip():
+                            _tk_res = _tk_create(_tk_nt.strip(), _tk_nd.strip())
+                            st.toast(_tk_res)
+                            st.rerun()
+                        else:
+                            st.warning("Voer een titel in.")
+
+                st.markdown("---")
+
+                # ── Kanban kolommen ─────────────────────────────────────
                 _tkc1, _tkc2, _tkc3, _tkc4 = st.columns(4)
 
                 # ── TO DO ──────────────────────────────────────
                 with _tkc1:
                     st.markdown("**📋 To Do**")
-                    with st.expander("➕ Nieuw ticket", expanded=(len(_tk_all) == 0)):
-                        _tk_nt = st.text_input("Titel", key="tk_new_title",
-                                               placeholder="Korte beschrijving...")
-                        _tk_nd = st.text_area("Beschrijving", key="tk_new_desc",
-                                              height=80,
-                                              placeholder="Stappen, verwacht gedrag, etc.")
-                        if st.button("➕ Aanmaken", key="tk_new_btn",
-                                     use_container_width=True):
-                            if _tk_nt.strip():
-                                _tk_create(_tk_nt.strip(), _tk_nd.strip())
-                                st.rerun()
-                            else:
-                                st.warning("Voer een titel in.")
                     for _tkt in _tk_todo:
                         with st.container(border=True):
                             st.markdown(f"**{_tkt['title']}**")
