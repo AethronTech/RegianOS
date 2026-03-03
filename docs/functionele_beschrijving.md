@@ -120,12 +120,13 @@ Veiligheidsmechanisme dat risicovolle acties onderschept vóór uitvoering:
 Project-gebaseerde werkcontext zodat het LLM en de tools afgestemd worden op het actieve project.
 
 **Fase 1 — Project-skills (`regian/skills/project.py`)**  
-Vijf publieke skills beheren de levenscyclus van projecten:
+Zes publieke skills beheren de levenscyclus van projecten:
 - `create_project` — maakt een projectmap met type-specifieke submappen en een `.regian_project.json`-manifest
 - `activate_project` — activeert een project (schrijft `ACTIVE_PROJECT` naar `.env`)
 - `deactivate_project` — wist de actieve projectcontext
 - `get_project_info` — leest het manifest van een project (leeg = actief project)
 - `list_projects` — scant de werkmap voor alle projectmappen met manifest
+- `rename_project` — hernoemt een project: mapnaam, manifest-velden (`name` + `path`) en eventueel `ACTIVE_PROJECT` worden bijgewerkt; `project_path`-velden in workflow run-states worden gecorrigeerd
 
 **Fase 2 — Contextbewuste agent (`regian/core/agent.py`)**  
 Bij een actief project wordt de systeemprompt van het LLM dynamisch opgebouwd met:
@@ -249,7 +250,7 @@ Bestaande skill-modules op Milestone 1.0.5:
 | `github` | GitHub-integratie | 9 |
 | `cron` | Taakplanning | 5 |
 | `help` | Hulp en documentatie | 1 |
-| `project` | Projectbeheer en -context | 5 |
+| `project` | Projectbeheer en -context | 6 |
 | `knowledge` | Kennisbank-beheer | 4 |
 
 ---

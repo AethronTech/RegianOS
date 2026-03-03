@@ -252,6 +252,7 @@ Typ `/` in het chatvenster om de autocomplete-dropdown te activeren met een voll
 | `/deactivate_project()` | Deactiveert het huidige actieve project |
 | `/get_project_info(name)` | Toont details van een project (leeg = actief project) |
 | `/list_projects()` | Toont alle beschikbare projecten |
+| `/rename_project(old_name, new_name)` | Hernoemt een bestaand project (mapnaam, manifest en actief project worden bijgewerkt) |
 
 > Projecten worden aangemaakt als submappen in de werkmap en bevatten een `.regian_project.json`-manifest. Het actieve project bepaalt de context van het LLM én de beschikbare tools.
 
