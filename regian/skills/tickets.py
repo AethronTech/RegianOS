@@ -177,13 +177,59 @@ def fix_ticket(ticket_id: str) -> str:
     ticket["updated_at"] = _now()
     _save(f, tickets)
 
-    # Bouw de taakomschrijving voor de agent
-    task = f"Fix het volgende probleem in het project:\n\n**{ticket['title']}**"
+    # ── Bouw taakomschrijving + projectcontext voor de agent ──────────────────
+    task = f"Fix het volgende probleem in het actieve project:\n\n**{ticket['title']}**"
     if ticket.get("description"):
         task += f"\n\n{ticket['description']}"
     if ticket.get("comments"):
-        last_comment = ticket["comments"][-1]["text"]
-        task += f"\n\nLaatste opmerking van de gebruiker: {last_comment}"
+        for c in ticket["comments"]:
+            if c.get("from") == "user":
+                task += f"\n\nOpmerking van gebruiker: {c['text']}"
+
+    # Voeg de bronbestanden van het project toe als context
+    try:
+        from regian.skills.workflow import _project_path as _tkpp
+        _pp = _tkpp()
+        if _pp:
+            from pathlib import Path as _TkPath
+            _proj = _TkPath(_pp)
+            # Verzamel relevante bronbestanden (geen node_modules, .git, build-artifacts)
+            _IGNORE = {
+                "node_modules", ".git", "__pycache__", ".venv", "venv",
+                "dist", "build", "htmlcov", ".mypy_cache", ".pytest_cache",
+            }
+            _EXT = {".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json", ".md", ".sh"}
+            _src_files = []
+            for _p in sorted(_proj.rglob("*")):
+                if any(ig in _p.parts for ig in _IGNORE):
+                    continue
+                if _p.is_file() and _p.suffix in _EXT and _p.stat().st_size < 40_000:
+                    _src_files.append(_p)
+                if len(_src_files) >= 30:
+                    break
+
+            if _src_files:
+                task += f"\n\n── Projectpad: {_pp} ──"
+                task += f"\n\nBronbestanden van het project (lees deze zorgvuldig voor je een fix schrijft):\n"
+                for _sf in _src_files:
+                    try:
+                        _rel = _sf.relative_to(_proj)
+                        _body = _sf.read_text(encoding="utf-8", errors="replace")
+                        task += f"\n### {_rel}\n```\n{_body[:3000]}\n```\n"
+                    except Exception:
+                        pass
+
+            task += (
+                f"\n\n── Instructies ──\n"
+                f"1. Analyseer de bronbestanden hierboven.\n"
+                f"2. Identificeer welk bestand(en) de bug of ontbrekende functionaliteit bevatten.\n"
+                f"3. Schrijf de volledige, gecorrigeerde versie van ENKEL de gewijzigde bestanden.\n"
+                f"4. Gebruik write_file met het VOLLEDIGE absolute pad (startend met {_pp}/).\n"
+                f"5. Schrijf geen nieuwe bestanden tenzij echt nodig — patch bestaande bestanden.\n"
+                f"6. Test de fix na schrijven met run_terminal_command indien van toepassing.\n"
+            )
+    except Exception:
+        pass
 
     # Agent uitvoeren
     from regian.core.agent import OrchestratorAgent
