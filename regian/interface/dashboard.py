@@ -1991,8 +1991,8 @@ def start_gui():
 
         wf_sub = st.radio(
             "Sectie",
-            ["▶️ Starten", "📋 Actieve runs", "� Tickets", "▶️ Project uitvoeren",
-             "�📚 Templates", "✏️ Visuele editor"],
+            ["▶️ Starten", "📋 Actieve runs", "🐛 Tickets", "▶️ Project uitvoeren",
+             "📚 Templates", "✏️ Visuele editor"],
             horizontal=True,
             label_visibility="collapsed",
             key="wf_sub",
