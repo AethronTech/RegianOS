@@ -2347,6 +2347,9 @@ def start_gui():
                         import os as _wf_os, signal as _wf_signal
                         _srv_key = f"srv_pid_{_pp_run}_{_run_cmd}"
                         _srv_pid = st.session_state.get(_srv_key)
+                        _srv_log = str(_pp_path / ".regian_server.log")
+                        _srv_log_key = f"srv_log_{_pp_run}"
+                        st.session_state[_srv_log_key] = _srv_log
 
                         # Controleer of process nog leeft
                         _srv_running = False
@@ -2364,9 +2367,10 @@ def start_gui():
                             if not _srv_running:
                                 if st.button(f"▶️ Start {_run_label}", key="wf_srv_start", type="primary", use_container_width=True):
                                     import subprocess as _wf_popen
+                                    _srv_logf = open(_srv_log, "a")
                                     _srv_proc = _wf_popen.Popen(
                                         _run_cmd, shell=True, cwd=_pp_run,
-                                        stdout=_wf_popen.DEVNULL, stderr=_wf_popen.DEVNULL,
+                                        stdout=_srv_logf, stderr=_srv_logf,
                                     )
                                     st.session_state[_srv_key] = _srv_proc.pid
                                     import time as _wf_time; _wf_time.sleep(1)
@@ -2388,6 +2392,26 @@ def start_gui():
 
                         if not _srv_running:
                             st.caption(f"Of handmatig: `cd {_pp_run}` → `{_run_cmd}`")
+
+                        # ── Log viewer ──────────────────────────────────────────────
+                        from pathlib import Path as _srvLogPath
+                        _log_p = _srvLogPath(_srv_log)
+                        if _log_p.exists() and _log_p.stat().st_size > 0:
+                            _lv_col1, _lv_col2 = st.columns([5, 1])
+                            with _lv_col1:
+                                st.caption(f"📄 Log: `{_log_p.name}`")
+                            with _lv_col2:
+                                if st.button("🗑️ Wis log", key="wf_srv_clearlog",
+                                             use_container_width=True, help="Logbestand leegmaken"):
+                                    _log_p.write_text("", encoding="utf-8")
+                                    st.rerun()
+                            with st.expander("📋 Server log", expanded=_srv_running):
+                                _log_lines = _log_p.read_text(encoding="utf-8", errors="replace")
+                                # Toon laatste 200 regels
+                                _log_tail = "\n".join(_log_lines.splitlines()[-200:])
+                                st.code(_log_tail or "(leeg)", language="bash")
+                                if _srv_running:
+                                    st.caption("↻ Ververs de pagina voor nieuwe regels")
                     else:
                         if st.button(f"▶️ Uitvoeren: {_run_label}",
                                      key="wf_run_exec", type="primary"):
@@ -2520,8 +2544,29 @@ def start_gui():
                             st.markdown(f"**{_tkt['title']}**")
                             st.caption(f"`{_tkt['id']}` · {_tkt['updated_at'][:10]}")
                             if _tkt.get("ai_output"):
-                                with st.expander("🤖 AI uitvoer", expanded=False):
-                                    st.markdown(_tkt["ai_output"][:600])
+                                with st.expander("🤖 AI samenvatting", expanded=False):
+                                    st.markdown(_tkt["ai_output"])
+                            # ── Agent stappen uit de actie-log ──────────
+                            try:
+                                from regian.core.action_log import get_log_grouped as _tk_alg
+                                _tk_groups = _tk_alg(limit_groups=500)
+                                _tk_steps = next(
+                                    (g["steps"] for g in _tk_groups if g["group_id"] == _tkt["id"]),
+                                    None
+                                )
+                                if _tk_steps:
+                                    with st.expander(f"📋 Agent log ({len(_tk_steps)} stappen)", expanded=False):
+                                        for _s in _tk_steps:
+                                            _icon = "✅" if not str(_s.get("result","")).startswith("❌") else "❌"
+                                            st.markdown(f"**{_icon} `{_s['tool']}`**")
+                                            if _s.get("args"):
+                                                _args_preview = {k: str(v)[:120] for k, v in _s["args"].items()}
+                                                st.caption(str(_args_preview))
+                                            if _s.get("result"):
+                                                st.code(str(_s["result"])[:400], language="bash")
+                                            st.divider()
+                            except Exception:
+                                pass
                             _tkr1, _tkr2 = st.columns(2)
                             if _tkr1.button("✅ Done", key=f"tk_done_{_tkt['id']}",
                                             use_container_width=True, type="primary"):
