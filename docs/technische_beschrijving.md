@@ -597,7 +597,7 @@ Detecteert build/run-scripts in het actieve projectpad en biedt:
 
 ---
 
-## 15. Token-verbruik module (REG-2, Milestone 1.3.0)
+## 15. Token-verbruik module (REG-2, Milestone 1.3.0+)
 
 ### 15.1 Opslag
 
@@ -609,7 +609,7 @@ Elke LLM-aanroep wordt opgeslagen in `regian_token_log.jsonl` (projectroot, naas
 | `OrchestratorAgent.run()` | `"run"` | Directe LLM-antwoorden (geen tools) |
 | `RegianAgent.ask()` | `"agent"` | Tool-selectie + antwoorden in agent-loop |
 
-JSON-structuur per entry:
+JSON-structuur per entry (bijgewerkt formaat):
 
 ```json
 {
@@ -617,6 +617,7 @@ JSON-structuur per entry:
   "provider":      "gemini",
   "model":         "gemini-2.5-flash",
   "project":       "mijn-app",
+  "prompt":        "Maak een README aan",
   "call_type":     "plan",
   "input_tokens":  1234,
   "output_tokens":  567,
@@ -624,6 +625,8 @@ JSON-structuur per entry:
   "cost_eur":      0.00045
 }
 ```
+
+Het `prompt`-veld bevat de eerste 500 tekens van de gebruikersopdracht. Lege string als de opdracht leeg was of als het een geautomatiseerde achtergrondaanroep betreft.
 
 ### 15.2 Token-extractie
 
@@ -634,18 +637,47 @@ JSON-structuur per entry:
 
 Bij geen metadata: `(0, 0)`.
 
-### 15.3 Pricing-tabel
+### 15.3 Pricing-tabel (datumreeksen)
 
-Prijzen (EUR per 1 000 000 tokens) zijn geconfigureerd in `_DEFAULT_PRICING` en overschrijfbaar via `TOKEN_PRICING` in `.env`. Kostprijs-berekening gebruikt prefix-match: `gemini-2.5-flash-001` matched op `gemini-2.5-flash`. Ollama-modellen zijn altijd 0,00 €.
+Prijzen (EUR per 1 000 000 tokens) zijn geconfigureerd in `_DEFAULT_PRICING` met ondersteuning voor datumreeksen. Meerdere periodes per model zijn mogelijk:
 
-### 15.4 Configuratie (.env)
+```python
+_DEFAULT_PRICING = {
+    "gemini-2.5-flash": [
+        {"from": "2025-01-01", "to": None, "input": 0.075, "output": 0.30}
+    ],
+}
+```
+
+`_calc_cost(model, input_tokens, output_tokens, date=None)`:
+- `date` standaard = vandaag (JJJJ-MM-DD string)
+- Vindt entry waar `from <= date <= to` (of `to is None`)
+- Bij meerdere overeenkomsten: de entry met de meest recente `from`-datum
+- **Backward compat**: oud formaat `{model: {"input": x, "output": y}}` werkt nog steeds
+- Prefix-match: `gemini-2.5-flash-001` matched op `gemini-2.5-flash`
+- Ollama-modellen zijn altijd 0,00 €
+
+### 15.4 Aggregatie-functies
+
+| Functie | Beschrijving |
+|---|---|
+| `get_summary_by_model()` | Per provider/model, gesorteerd op kostprijs aflopend |
+| `get_summary_by_project()` | Per project, gesorteerd op kostprijs |
+| `get_monthly_evolution()` | Per maand (JJJJ-MM), chronologisch |
+| `get_daily_evolution()` | Per dag (JJJJ-MM-DD), chronologisch |
+| `get_summary_by_prompt()` | Per unieke opdracht (eerste 200 tekens als key), kost aflopend |
+| `get_totals()` | Globale totalen |
+
+`get_summary_by_prompt()` groepeert lege prompts onder `"(geen opdracht)"`.
+
+### 15.5 Configuratie (.env)
 
 | Variabele | Standaard | Beschrijving |
 |---|---|---|
 | `TOKEN_LOG_FILE` | `regian_token_log.jsonl` | Bestandsnaam van het logbestand |
-| `TOKEN_PRICING` | _(ingebouwde tabel)_ | JSON-string met prijzen per model |
+| `TOKEN_PRICING` | _(ingebouwde tabel)_ | JSON-string met datumreeks-prijzen per model |
 
-### 15.5 Thread-safety
+### 15.6 Thread-safety
 
 Schrijven naar het logbestand verloopt via `threading.Lock()` (`_lock`), identiek aan `action_log.py`.
 
@@ -662,4 +694,5 @@ Schrijven naar het logbestand verloopt via `threading.Lock()` (`_lock`), identie
 
 ---
 
-*Regian OS — Milestone 1.3.0 · Intern document · 7 maart 2026*
+*Regian OS — Milestone 1.3.1 · Intern document · 2026*
+

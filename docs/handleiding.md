@@ -713,28 +713,35 @@ De tab **📊 Tokens** geeft real-time inzicht in het LLM-verbruik en de bijhore
 | **KPI-rij** | Totaal aanroepen, totaal tokens (input + output), kostprijs EUR |
 | **Per provider / model** | Uitsplitsing per modelvariant met token-aantallen en prijs |
 | **Per project** | Token-verbruik per actief project (of «geen project») |
-| **Evolutie per maand** | Staafgrafiek + tabel met maandelijkse trends |
-| **Prijsinstellingen** | Bewerkbare JSON-prijslijst (EUR / 1 000 000 tokens) |
+| **Per opdracht** | Aggregatie per unieke opdrachttekst — hoeveel token/EUR kost elke opdracht? |
+| **Evolutie** | Subtabs **Per maand** (staafgrafiek) en **Per dag** (lijngrafiek) |
 
 ### Prijslijst aanpassen
 
-Open **⚙️ Prijsinstellingen** onderaan de tab. De standaard pricing is gebaseerd op Google Gemini-tarieven (maart 2026). Ollama-modellen (lokaal) zijn gratis (0,00 €).
+De pricing-editor staat in de tab **⚙️ Instellingen**, sectie **💰 Token prijzen bewerken**.
 
-Voorbeeldformaat:
+- Elke rij bevat: Model, Van datum (JJJJ-MM-DD), Tot datum (leeg = huidig), Input EUR/1M, Output EUR/1M
+- Meerdere rijen per model zijn mogelijk voor historische prijswijzigingen
+- Klik **💾 Prijzen opslaan** om op te slaan in `.env`
+
+Voorbeeldformaat (intern):
 
 ```json
 {
-  "gemini-2.5-flash": { "input": 0.075, "output": 0.30 },
-  "gemini-2.5-pro":   { "input": 1.25,  "output": 5.00 },
-  "mistral":          { "input": 0.0,   "output": 0.0  }
+  "gemini-2.5-flash": [
+    {"from": "2025-01-01", "to": null, "input": 0.075, "output": 0.30}
+  ],
+  "mistral": [
+    {"from": "2025-01-01", "to": null, "input": 0.0, "output": 0.0}
+  ]
 }
 ```
 
-Klik **💾 Prijzen opslaan** — de waarden worden opgeslagen in `.env` als `TOKEN_PRICING`.
+Ollama-modellen (lokaal) zijn gratis — stel input/output in op `0.0`.
 
 ### Token-log wissen
 
-Via de knop **🗑️ Wis token-log** onderaan de tab wordt het logbestand (`regian_token_log.jsonl`) volledig leeggemaakt.
+Via de knop **🗑️ Wis token-log** onderaan de Tokens-tab wordt het logbestand (`regian_token_log.jsonl`) volledig leeggemaakt.
 
 ### Logbestand
 
@@ -748,10 +755,11 @@ Elk LLM-aanroep levert één JSONL-regel:
 
 ```json
 {"ts": "2026-03-07T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
- "project": "mijn-app", "call_type": "plan", "input_tokens": 1234,
- "output_tokens": 567, "total_tokens": 1801, "cost_eur": 0.00045}
+ "project": "mijn-app", "prompt": "Maak een README aan", "call_type": "plan",
+ "input_tokens": 1234, "output_tokens": 567, "total_tokens": 1801, "cost_eur": 0.00045}
 ```
 
 ---
 
-*Regian OS — Milestone 1.3.0 · 7 maart 2026*
+*Regian OS — Milestone 1.3.1 · 2026*
+

@@ -428,42 +428,61 @@ De ingebouwde template bevat nu een extra fase **Test & Validatie** (na de imple
 Elke LLM-aanroep in `OrchestratorAgent.plan()`, `OrchestratorAgent.run()` en `RegianAgent.ask()` wordt voortaan geregistreerd in `regian_token_log.jsonl`.
 
 Per entry:
-- Timestamp, provider, model, actief project, call-type
+- Timestamp, provider, model, actief project, call-type, **opdrachttekst** (prompt)
 - Input tokens, output tokens, totaal tokens
-- Kostprijs in EUR (berekend via configureerbare pricing-tabel)
+- Kostprijs in EUR (berekend via datumgebonden pricing-tabel)
 
 ### 12.2 Token-log module (`regian/core/token_log.py`)
 
-Nieuwe core-module met de volgende functies:
+Core-module met de volgende functies:
 
 | Functie | Beschrijving |
 |---|---|
-| `log_tokens()` | Schrijft één entry naar het JSONL-logbestand |
+| `log_tokens()` | Schrijft één entry naar het JSONL-logbestand (incl. prompt-veld) |
 | `_extract_tokens(response)` | Haalt token-aantallen op uit een LangChain response |
-| `_calc_cost(model, in, out)` | Berekent EUR-kostprijs via prefix-match pricing |
+| `_calc_cost(model, in, out, date)` | Berekent EUR-kostprijs via datumgebonden prefix-match pricing |
 | `get_summary_by_model()` | Aggregatie per provider/model, gesorteerd op kostprijs |
 | `get_summary_by_project()` | Aggregatie per project, gesorteerd op kostprijs |
 | `get_monthly_evolution()` | Maandelijkse evolutie, chronologisch gesorteerd |
+| `get_daily_evolution()` | Dagelijkse evolutie, chronologisch gesorteerd |
+| `get_summary_by_prompt()` | Aggregatie per opdracht, gesorteerd op kostprijs aflopend |
 | `get_totals()` | Globale totalen (tokens, kostprijs, aanroepen) |
-| `get_pricing()` / `set_pricing()` | Lees/schrijf de pricing-tabel (EUR/1M tokens) |
+| `get_pricing()` / `set_pricing()` | Lees/schrijf de pricing-tabel met datumreeksen |
 | `clear_token_log()` | Wis het logbestand |
+
+**JSONL-entry formaat:**
+```json
+{"ts": "2026-03-07T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+ "project": "mijn-app", "prompt": "Maak een README aan", "call_type": "plan",
+ "input_tokens": 1234, "output_tokens": 567, "total_tokens": 1801, "cost_eur": 0.00045}
+```
 
 ### 12.3 Dashboard — 📊 Tokens-tab
 
-Nieuwe zevende tab in de cockpit met:
+Zevende tab in de cockpit met:
 - **KPI-rij**: 4 metrics (aanroepen, totaal/input tokens, kostprijs EUR)
 - **Per provider/model**: tabel met uitsplitsing
 - **Per project**: tabel met uitsplitsing per actief project
-- **Evolutie per maand**: staafgrafiek + overzichtstabel
-- **Prijsinstellingen**: editable JSON-editor voor de pricing-tabel
+- **Per opdracht**: tabel met aggregatie per unieke opdrachttekst
+- **Evolutie**: subtabs "Per maand" (staafgrafiek + tabel) en "Per dag" (lijngrafiek + tabel)
 - **Wis token-log**: knop om het logbestand te leegmaken
 
-### 12.4 Configuratie
+### 12.4 Dashboard — ⚙️ Instellingen-tab (uitbreiding)
 
-Nieuwe .env-variabelen:
-- `TOKEN_PRICING`: JSON-string met prijzen per model (EUR/1M tokens)
+De "Token prijzen bewerken"-sectie is toegevoegd aan de Instellingen-tab, naast de model-instellingen. De editor ondersteunt:
+- Prijzen per model in EUR/1M tokens
+- **Van/tot-datumreeksen**: meerdere prijsperiodes per model mogelijk
+- Rijen toevoegen/verwijderen via `st.data_editor`
+
+### 12.5 Configuratie
+
+.env-variabelen:
+- `TOKEN_PRICING`: JSON-string met prijzen per model in datumreeks-formaat
+  ```json
+  {"gemini-2.5-flash": [{"from": "2025-01-01", "to": null, "input": 0.075, "output": 0.30}]}
+  ```
 - `TOKEN_LOG_FILE`: bestandsnaam van het token-logbestand (standaard `regian_token_log.jsonl`)
 
 ---
 
-*Regian OS — Milestone 1.3.0 · Intern document · 7 maart 2026*
+*Regian OS — Milestone 1.3.0/1.3.1 · Intern document · 2026*
