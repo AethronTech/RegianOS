@@ -2967,10 +2967,11 @@ def start_gui():
             if prompt_rows:
                 import pandas as _tkpd4
                 _df_prompt = _tkpd4.DataFrame(prompt_rows).rename(columns={
-                    "prompt": "Opdracht", "calls": "Aanroepen", "last_ts": "Laatste aanroep",
+                    "prompt": "Opdracht", "modellen": "Provider/Model",
+                    "calls": "Aanroepen", "last_ts": "Laatste aanroep",
                     "input_tokens": "Input tokens", "output_tokens": "Output tokens",
                     "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
-                })[["Opdracht", "Aanroepen", "Laatste aanroep", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
+                })[["Opdracht", "Provider/Model", "Aanroepen", "Laatste aanroep", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
                 _df_prompt["Kostprijs EUR"] = _df_prompt["Kostprijs EUR"].map(
                     lambda x: f"€ {x:.4f}"
                 )

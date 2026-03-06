@@ -372,7 +372,7 @@ def test_get_daily_evolution_leeg(token_log_file):
 # ---------------------------------------------------------------------------
 
 def test_get_summary_by_prompt(token_log_file):
-    """Aggregatie per prompt klopt."""
+    """Aggregatie per prompt klopt, inclusief modellen-veld."""
     import regian.core.token_log as tlm
     entries = [
         {"ts": "2026-03-01T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
@@ -394,8 +394,30 @@ def test_get_summary_by_prompt(token_log_file):
     assert readme_row["calls"] == 2
     assert readme_row["total_tokens"] == 450
     assert readme_row["cost_eur"] == pytest.approx(0.03)
+    assert readme_row["modellen"] == "gemini/gemini-2.5-flash"
     # Gesorteerd op kostprijs aflopend
     assert rows[0]["prompt"] == "Maak README"
+
+
+def test_get_summary_by_prompt_meerdere_modellen(token_log_file):
+    """Meerdere modellen per opdracht worden komma-gescheiden getoond."""
+    import regian.core.token_log as tlm
+    entries = [
+        {"ts": "2026-03-01T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "doe iets", "call_type": "plan",
+         "input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "cost_eur": 0.0},
+        {"ts": "2026-03-01T10:01:00", "provider": "ollama", "model": "mistral",
+         "project": "", "prompt": "doe iets", "call_type": "agent",
+         "input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "cost_eur": 0.0},
+    ]
+    with open(token_log_file, "w", encoding="utf-8") as f:
+        for e in entries:
+            f.write(json.dumps(e) + "\n")
+    rows = tlm.get_summary_by_prompt()
+    assert len(rows) == 1
+    modellen = rows[0]["modellen"]
+    assert "gemini/gemini-2.5-flash" in modellen
+    assert "ollama/mistral" in modellen
 
 
 def test_get_summary_by_prompt_geen_prompt(token_log_file):

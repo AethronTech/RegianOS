@@ -341,9 +341,11 @@ def get_summary_by_prompt() -> list[dict]:
     """
     Geeft een samenvatting per unieke opdracht (prompt).
     Entries zonder prompt worden gegroepeerd onder '(geen opdracht)'.
+    Bevat ook de unieke combinaties van provider/model die voor deze opdracht gebruikt werden.
     Gesorteerd op kostprijs aflopend.
     """
     agg: dict[str, dict] = {}
+    models_seen: dict[str, set] = {}
     for e in get_all_entries():
         raw = (e.get("prompt") or "").strip()
         key = raw[:200] if raw else "(geen opdracht)"
@@ -357,6 +359,7 @@ def get_summary_by_prompt() -> list[dict]:
                 "calls": 0,
                 "last_ts": "",
             }
+            models_seen[key] = set()
         agg[key]["input_tokens"]  += e.get("input_tokens", 0)
         agg[key]["output_tokens"] += e.get("output_tokens", 0)
         agg[key]["total_tokens"]  += e.get("total_tokens", 0)
@@ -365,6 +368,12 @@ def get_summary_by_prompt() -> list[dict]:
         ts = e.get("ts", "")
         if ts > agg[key]["last_ts"]:
             agg[key]["last_ts"] = ts
+        provider = e.get("provider", "")
+        model    = e.get("model", "")
+        if provider or model:
+            models_seen[key].add(f"{provider}/{model}" if provider else model)
+    for key, row in agg.items():
+        row["modellen"] = ", ".join(sorted(models_seen[key]))
     return sorted(agg.values(), key=lambda x: x["cost_eur"], reverse=True)
 
 
