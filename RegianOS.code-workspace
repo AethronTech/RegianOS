@@ -5,8 +5,12 @@
 			"path": "."
 		},
 		{
-			"name": "RegianWorkspace (data)",
+			"name": "RegianWorkspace (data — prod)",
 			"path": "/Users/dirkverstraete/RegianWorkspace"
+		},
+		{
+			"name": "RegianWorkspace (data — qa)",
+			"path": "/Users/dirkverstraete/RegianWorkspace_QA"
 		}
 	],
 	"settings": {}
