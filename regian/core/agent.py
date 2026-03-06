@@ -305,6 +305,7 @@ class OrchestratorAgent:
                 input_tokens=_inp,
                 output_tokens=_out,
                 call_type="plan",
+                prompt=prompt,
             )
         except Exception:
             pass
@@ -355,6 +356,7 @@ class OrchestratorAgent:
                         input_tokens=_inp,
                         output_tokens=_out,
                         call_type="run",
+                        prompt=prompt,
                     )
                 except Exception:
                     pass
@@ -439,6 +441,7 @@ class RegianAgent:
                         input_tokens=_inp,
                         output_tokens=_out,
                         call_type="agent",
+                        prompt=prompt,
                     )
                 except Exception:
                     pass

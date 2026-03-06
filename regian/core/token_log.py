@@ -3,7 +3,8 @@
 Token-verbruik logging voor Regian OS (REG-2).
 
 Elke LLM-aanroep in OrchestratorAgent en RegianAgent wordt hier geregistreerd
-met provider, model, token-aantallen, kostprijs en project-context.
+met provider, model, token-aantallen, kostprijs, project-context en de
+originele gebruikersopdracht.
 
 Opslag: regian_token_log.jsonl (naast de actie-log in de projectroot).
 
@@ -13,12 +14,21 @@ Structuur per entry:
         "provider":     "gemini",
         "model":        "gemini-2.5-flash",
         "project":      "mijn-app",           # "" = geen actief project
+        "prompt":       "Maak een README aan", # originele gebruikersopdracht
         "call_type":    "plan" | "run" | "agent",
         "input_tokens":  1234,
         "output_tokens":  567,
         "total_tokens":  1801,
         "cost_eur":      0.00045              # berekend via pricing-tabel
     }
+
+Pricing-formaat (new, met datumrange):
+    {
+        "gemini-2.5-flash": [
+            {"from": "2025-01-01", "to": null, "input": 0.075, "output": 0.30}
+        ]
+    }
+Backward-compatible: waarde als dict (oud formaat) wordt ook ondersteund.
 """
 import json
 import threading
@@ -34,21 +44,22 @@ def _get_token_log_file() -> Path:
     return Path(__file__).parent.parent.parent / "regian_token_log.jsonl"
 
 
-# ── Pricing-tabel (EUR per 1 000 000 tokens) ──────────────────────────────────
+# ── Pricing-tabel (EUR per 1 000 000 tokens, met geldigheidsperiode) ─────────
 # Bron: Google Gemini pricing (maart 2026, approximatief).
-# Instelbaar via settings.py (TOKEN_PRICING in .env als JSON).
+# Nieuw formaat: {model: [{"from": "YYYY-MM-DD", "to": null|"YYYY-MM-DD", "input": float, "output": float}]}
+# Oud formaat (backward compat): {model: {"input": float, "output": float}}
 
-_DEFAULT_PRICING: dict[str, dict[str, float]] = {
+_DEFAULT_PRICING: dict[str, list[dict]] = {
     # Gemini
-    "gemini-2.5-flash":    {"input": 0.075,  "output": 0.30},
-    "gemini-2.5-pro":      {"input": 1.25,   "output": 5.00},
-    "gemini-2.0-flash":    {"input": 0.075,  "output": 0.30},
-    "gemini-flash-latest": {"input": 0.075,  "output": 0.30},
+    "gemini-2.5-flash":    [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
+    "gemini-2.5-pro":      [{"from": "2025-01-01", "to": None, "input": 1.25,   "output": 5.00}],
+    "gemini-2.0-flash":    [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
+    "gemini-flash-latest": [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
     # Ollama (lokaal → gratis)
-    "mistral":             {"input": 0.0,    "output": 0.0},
-    "llama3.1:8b":         {"input": 0.0,    "output": 0.0},
-    "llama3.2":            {"input": 0.0,    "output": 0.0},
-    "deepseek-r1:8b":      {"input": 0.0,    "output": 0.0},
+    "mistral":             [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
+    "llama3.1:8b":         [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
+    "llama3.2":            [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
+    "deepseek-r1:8b":      [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
 }
 
 def get_pricing() -> dict[str, dict[str, float]]:
@@ -79,18 +90,38 @@ def set_pricing(pricing: dict[str, dict[str, float]]) -> None:
     os.environ["TOKEN_PRICING"] = value
 
 
-def _calc_cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Bereken de kostprijs in EUR op basis van de pricing-tabel."""
+def _calc_cost(model: str, input_tokens: int, output_tokens: int, date: Optional[str] = None) -> float:
+    """Bereken de kostprijs in EUR op basis van de pricing-tabel voor de opgegeven datum."""
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
     pricing = get_pricing()
-    # exacte match
-    if model in pricing:
-        p = pricing[model]
-    else:
-        # prefix-match (bijv. "gemini-2.5-flash-001" → "gemini-2.5-flash")
-        p = next(
+
+    # Zoek de entries voor dit model (exacte match, daarna prefix-match)
+    entries = pricing.get(model)
+    if entries is None:
+        entries = next(
             (v for k, v in pricing.items() if model.lower().startswith(k.lower())),
-            {"input": 0.0, "output": 0.0},
+            None,
         )
+    if entries is None:
+        return 0.0
+
+    # Backward compat: oud formaat is een gewone dict
+    if isinstance(entries, dict):
+        p = entries
+    else:
+        # Nieuw formaat: lijst met datumrange-entries
+        # Zoek de meest recente entry waarvoor geldt: from <= date <= to (of to is None)
+        matching = [
+            e for e in entries
+            if (not e.get("from") or e["from"] <= date)
+            and (not e.get("to") or e["to"] >= date)
+        ]
+        if not matching:
+            return 0.0
+        # Neem de entry met de meest recente startdatum
+        p = max(matching, key=lambda e: e.get("from") or "")
+
     cost = (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
     return round(cost, 8)
 
@@ -104,6 +135,7 @@ def log_tokens(
     output_tokens: int,
     call_type: str = "plan",
     project: Optional[str] = None,
+    prompt: str = "",
 ) -> None:
     """
     Schrijf één token-verbruik entry naar regian_token_log.jsonl.
@@ -114,6 +146,7 @@ def log_tokens(
     :param output_tokens:  aantal uitvoer-tokens
     :param call_type:      'plan', 'run' of 'agent'
     :param project:        naam van het actieve project (of None)
+    :param prompt:         de originele gebruikersopdracht (voor detail-analyse)
     """
     if project is None:
         try:
@@ -123,13 +156,15 @@ def log_tokens(
             project = ""
 
     total = input_tokens + output_tokens
-    cost = _calc_cost(model, input_tokens, output_tokens)
+    ts_now = datetime.now()
+    cost = _calc_cost(model, input_tokens, output_tokens, date=ts_now.strftime("%Y-%m-%d"))
 
     entry = {
-        "ts":            datetime.now().isoformat(timespec="seconds"),
+        "ts":            ts_now.isoformat(timespec="seconds"),
         "provider":      provider,
         "model":         model,
         "project":       project,
+        "prompt":        prompt[:500] if prompt else "",  # max 500 tekens
         "call_type":     call_type,
         "input_tokens":  input_tokens,
         "output_tokens": output_tokens,
@@ -272,6 +307,65 @@ def get_monthly_evolution() -> list[dict]:
         agg[month]["cost_eur"]      += e.get("cost_eur", 0.0)
         agg[month]["calls"]         += 1
     return sorted(agg.values(), key=lambda x: x["month"])
+
+
+def get_daily_evolution() -> list[dict]:
+    """
+    Geeft token-verbruik en kostprijs per dag terug (YYYY-MM-DD),
+    gesorteerd chronologisch.
+    """
+    agg: dict[str, dict] = {}
+    for e in get_all_entries():
+        ts = e.get("ts", "")
+        day = ts[:10]  # YYYY-MM-DD
+        if not day:
+            continue
+        if day not in agg:
+            agg[day] = {
+                "day": day,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost_eur": 0.0,
+                "calls": 0,
+            }
+        agg[day]["input_tokens"]  += e.get("input_tokens", 0)
+        agg[day]["output_tokens"] += e.get("output_tokens", 0)
+        agg[day]["total_tokens"]  += e.get("total_tokens", 0)
+        agg[day]["cost_eur"]      += e.get("cost_eur", 0.0)
+        agg[day]["calls"]         += 1
+    return sorted(agg.values(), key=lambda x: x["day"])
+
+
+def get_summary_by_prompt() -> list[dict]:
+    """
+    Geeft een samenvatting per unieke opdracht (prompt).
+    Entries zonder prompt worden gegroepeerd onder '(geen opdracht)'.
+    Gesorteerd op kostprijs aflopend.
+    """
+    agg: dict[str, dict] = {}
+    for e in get_all_entries():
+        raw = (e.get("prompt") or "").strip()
+        key = raw[:200] if raw else "(geen opdracht)"
+        if key not in agg:
+            agg[key] = {
+                "prompt": key,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "cost_eur": 0.0,
+                "calls": 0,
+                "last_ts": "",
+            }
+        agg[key]["input_tokens"]  += e.get("input_tokens", 0)
+        agg[key]["output_tokens"] += e.get("output_tokens", 0)
+        agg[key]["total_tokens"]  += e.get("total_tokens", 0)
+        agg[key]["cost_eur"]      += e.get("cost_eur", 0.0)
+        agg[key]["calls"]         += 1
+        ts = e.get("ts", "")
+        if ts > agg[key]["last_ts"]:
+            agg[key]["last_ts"] = ts
+    return sorted(agg.values(), key=lambda x: x["cost_eur"], reverse=True)
 
 
 def get_totals() -> dict:

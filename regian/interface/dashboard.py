@@ -1690,6 +1690,69 @@ def start_gui():
                     st.success("✅ Ollama-modellen hersteld")
                     st.rerun()
 
+        with st.expander("💰 Token prijzen bewerken"):
+            st.caption(
+                "Stel de prijs per model in (EUR / 1 000 000 tokens). "
+                "Voeg meerdere rijen toe voor één model om prijswijzigingen bij te houden. "
+                "'Tot datum' leeg = momenteel geldig. Datumformaat: **JJJJ-MM-DD**."
+            )
+            from regian.core.token_log import get_pricing, set_pricing as _set_pricing
+            import pandas as _pd_pr
+            _pricing_now = get_pricing()
+            _pr_rows = []
+            for _pr_model, _pr_entries in _pricing_now.items():
+                if isinstance(_pr_entries, dict):
+                    # backward compat: oud formaat
+                    _pr_rows.append({
+                        "Model": _pr_model,
+                        "Van datum": "2025-01-01",
+                        "Tot datum": "",
+                        "Input EUR/1M": float(_pr_entries.get("input", 0)),
+                        "Output EUR/1M": float(_pr_entries.get("output", 0)),
+                    })
+                else:
+                    for _pr_e in _pr_entries:
+                        _pr_rows.append({
+                            "Model": _pr_model,
+                            "Van datum": _pr_e.get("from", ""),
+                            "Tot datum": _pr_e.get("to") or "",
+                            "Input EUR/1M": float(_pr_e.get("input", 0)),
+                            "Output EUR/1M": float(_pr_e.get("output", 0)),
+                        })
+            if not _pr_rows:
+                _pr_rows = [{"Model": "", "Van datum": "", "Tot datum": "", "Input EUR/1M": 0.0, "Output EUR/1M": 0.0}]
+            _df_pr = _pd_pr.DataFrame(_pr_rows)
+            _edited_pr = st.data_editor(
+                _df_pr,
+                num_rows="dynamic",
+                use_container_width=True,
+                key="settings_pricing_editor",
+                column_config={
+                    "Model": st.column_config.TextColumn("Model", required=True),
+                    "Van datum": st.column_config.TextColumn("Van (JJJJ-MM-DD)", required=True),
+                    "Tot datum": st.column_config.TextColumn("Tot (leeg = huidig)"),
+                    "Input EUR/1M": st.column_config.NumberColumn("Input EUR/1M", min_value=0.0, format="%.4f"),
+                    "Output EUR/1M": st.column_config.NumberColumn("Output EUR/1M", min_value=0.0, format="%.4f"),
+                },
+            )
+            if st.button("💾 Prijzen opslaan", key="save_pricing"):
+                _new_pricing: dict = {}
+                for _, _pr_row in _edited_pr.iterrows():
+                    _pm = str(_pr_row.get("Model", "")).strip()
+                    if not _pm:
+                        continue
+                    if _pm not in _new_pricing:
+                        _new_pricing[_pm] = []
+                    _new_pricing[_pm].append({
+                        "from": str(_pr_row.get("Van datum", "")).strip(),
+                        "to": str(_pr_row.get("Tot datum", "")).strip() or None,
+                        "input": float(_pr_row.get("Input EUR/1M", 0)),
+                        "output": float(_pr_row.get("Output EUR/1M", 0)),
+                    })
+                _set_pricing(_new_pricing)
+                st.success(f"✅ Prijzen opgeslagen voor {len(_new_pricing)} modellen.")
+                st.rerun()
+
         st.markdown("---")
 
         # 3. HITL
@@ -2849,9 +2912,9 @@ def start_gui():
         st.header("📊 Token-verbruik & Kosten")
         from regian.core.token_log import (
             get_totals, get_summary_by_model, get_summary_by_project,
-            get_monthly_evolution, clear_token_log, get_pricing, set_pricing,
+            get_monthly_evolution, get_daily_evolution, get_summary_by_prompt,
+            clear_token_log,
         )
-        import json as _tkjson
 
         totals = get_totals()
 
@@ -2898,41 +2961,60 @@ def start_gui():
             else:
                 st.info("Nog geen projectdata beschikbaar.")
 
-        # Evolutie per maand
-        with st.expander("📈 Evolutie per maand", expanded=False):
-            monthly = get_monthly_evolution()
-            if monthly:
-                import pandas as _tkpd3
-                _df_month = _tkpd3.DataFrame(monthly).rename(columns={
-                    "month": "Maand", "calls": "Aanroepen",
+        # Per opdracht / prompt
+        with st.expander("💬 Per opdracht", expanded=False):
+            prompt_rows = get_summary_by_prompt()
+            if prompt_rows:
+                import pandas as _tkpd4
+                _df_prompt = _tkpd4.DataFrame(prompt_rows).rename(columns={
+                    "prompt": "Opdracht", "calls": "Aanroepen", "last_ts": "Laatste aanroep",
+                    "input_tokens": "Input tokens", "output_tokens": "Output tokens",
                     "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
-                })
-                _df_month = _df_month.set_index("Maand")
-                st.bar_chart(_df_month[["Totaal tokens"]])
-                _df_month["Kostprijs EUR"] = _df_month["Kostprijs EUR"].map(
+                })[["Opdracht", "Aanroepen", "Laatste aanroep", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
+                _df_prompt["Kostprijs EUR"] = _df_prompt["Kostprijs EUR"].map(
                     lambda x: f"€ {x:.4f}"
                 )
-                st.dataframe(_df_month, use_container_width=True)
+                st.dataframe(_df_prompt, use_container_width=True, hide_index=True)
             else:
-                st.info("Nog geen maandelijkse data beschikbaar.")
+                st.info("Nog geen opdrachtdata beschikbaar.")
 
-        # Prijsinstellingen
-        with st.expander("⚙️ Prijsinstellingen (EUR / 1M tokens)", expanded=False):
-            current_pricing = get_pricing()
-            _pricing_txt = st.text_area(
-                "Prijslijst (JSON)",
-                value=_tkjson.dumps(current_pricing, indent=2, ensure_ascii=False),
-                height=300,
-                key="token_pricing_editor",
-            )
-            if st.button("💾 Prijzen opslaan", key="token_pricing_save"):
-                try:
-                    _new_pricing = _tkjson.loads(_pricing_txt)
-                    set_pricing(_new_pricing)
-                    st.success("✅ Prijzen opgeslagen.")
-                    st.rerun()
-                except _tkjson.JSONDecodeError as _pje:
-                    st.error(f"❌ Ongeldige JSON: {_pje}")
+        # Evolutie
+        with st.expander("📈 Evolutie", expanded=False):
+            _ev_tab1, _ev_tab2 = st.tabs(["Per maand", "Per dag"])
+
+            with _ev_tab1:
+                monthly = get_monthly_evolution()
+                if monthly:
+                    import pandas as _tkpd3
+                    _df_month = _tkpd3.DataFrame(monthly).rename(columns={
+                        "month": "Maand", "calls": "Aanroepen",
+                        "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
+                    })
+                    _df_month = _df_month.set_index("Maand")
+                    st.bar_chart(_df_month[["Totaal tokens"]])
+                    _df_month["Kostprijs EUR"] = _df_month["Kostprijs EUR"].map(
+                        lambda x: f"€ {x:.4f}"
+                    )
+                    st.dataframe(_df_month, use_container_width=True)
+                else:
+                    st.info("Nog geen maandelijkse data beschikbaar.")
+
+            with _ev_tab2:
+                daily = get_daily_evolution()
+                if daily:
+                    import pandas as _tkpd5
+                    _df_day = _tkpd5.DataFrame(daily).rename(columns={
+                        "day": "Dag", "calls": "Aanroepen",
+                        "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
+                    })
+                    _df_day = _df_day.set_index("Dag")
+                    st.bar_chart(_df_day[["Totaal tokens"]])
+                    _df_day["Kostprijs EUR"] = _df_day["Kostprijs EUR"].map(
+                        lambda x: f"€ {x:.4f}"
+                    )
+                    st.dataframe(_df_day, use_container_width=True)
+                else:
+                    st.info("Nog geen dagelijkse data beschikbaar.")
 
         st.markdown("---")
 

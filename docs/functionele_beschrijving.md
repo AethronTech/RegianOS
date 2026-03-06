@@ -403,7 +403,7 @@ Als er geen script gevonden wordt: de knop **🔨 Maak build.sh aan** laat de AI
 
 ---
 
-## 11. Verbeteringen in Milestone 1.2.0
+## 11. Verbeteringen in Milestone 1.2.1
 
 ### 11.1 Agent-context bij ticket-fixes
 

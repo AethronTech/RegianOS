@@ -30,17 +30,27 @@ def test_calc_cost_exact_match(monkeypatch):
     """Exacte match in pricing-tabel levert juiste kostprijs op."""
     import regian.core.token_log as tlm
     monkeypatch.setattr(tlm, "get_pricing", lambda: {
-        "test-model": {"input": 1.0, "output": 2.0}
+        "test-model": [{"from": "2025-01-01", "to": None, "input": 1.0, "output": 2.0}]
     })
     cost = tlm._calc_cost("test-model", 1_000_000, 1_000_000)
     assert cost == pytest.approx(3.0)
+
+
+def test_calc_cost_exact_match_old_format(monkeypatch):
+    """Oud formaat (dict zonder datumrange) werkt nog steeds."""
+    import regian.core.token_log as tlm
+    monkeypatch.setattr(tlm, "get_pricing", lambda: {
+        "test-model": {"input": 1.0, "output": 2.0}
+    })
+    cost = tlm._calc_cost("test-model", 1_000_000, 0)
+    assert cost == pytest.approx(1.0)
 
 
 def test_calc_cost_prefix_match(monkeypatch):
     """Prefix-match (bijv. 'gemini-2.5-flash-001') valt terug op basismodel."""
     import regian.core.token_log as tlm
     monkeypatch.setattr(tlm, "get_pricing", lambda: {
-        "gemini-2.5-flash": {"input": 0.075, "output": 0.30}
+        "gemini-2.5-flash": [{"from": "2025-01-01", "to": None, "input": 0.075, "output": 0.30}]
     })
     cost = tlm._calc_cost("gemini-2.5-flash-001", 1_000_000, 0)
     assert cost == pytest.approx(0.075)
@@ -58,10 +68,27 @@ def test_calc_cost_ollama_free(monkeypatch):
     """Ollama-model → kostprijs 0.0."""
     import regian.core.token_log as tlm
     monkeypatch.setattr(tlm, "get_pricing", lambda: {
-        "mistral": {"input": 0.0, "output": 0.0}
+        "mistral": [{"from": "2025-01-01", "to": None, "input": 0.0, "output": 0.0}]
     })
     cost = tlm._calc_cost("mistral", 100_000, 50_000)
     assert cost == 0.0
+
+
+def test_calc_cost_date_range_active(monkeypatch):
+    """Juiste pricing-entry wordt geselecteerd op basis van datum."""
+    import regian.core.token_log as tlm
+    monkeypatch.setattr(tlm, "get_pricing", lambda: {
+        "my-model": [
+            {"from": "2025-01-01", "to": "2025-12-31", "input": 1.0, "output": 1.0},
+            {"from": "2026-01-01", "to": None,         "input": 2.0, "output": 2.0},
+        ]
+    })
+    # Datum valt in 2026 → tweede entry
+    cost = tlm._calc_cost("my-model", 1_000_000, 0, date="2026-03-01")
+    assert cost == pytest.approx(2.0)
+    # Datum valt in 2025 → eerste entry
+    cost2 = tlm._calc_cost("my-model", 1_000_000, 0, date="2025-06-01")
+    assert cost2 == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +140,8 @@ def test_log_tokens_schrijft_naar_bestand(token_log_file, monkeypatch):
     """log_tokens() schrijft een geldige JSON-regel naar het logbestand."""
     import regian.core.token_log as tlm
     monkeypatch.setenv("REGIAN_ACTIVE_PROJECT", "test-project")
-    tlm.log_tokens("gemini", "gemini-2.5-flash", 100, 50, call_type="plan", project="test-project")
+    tlm.log_tokens("gemini", "gemini-2.5-flash", 100, 50, call_type="plan",
+                   project="test-project", prompt="Maak een README")
     lines = token_log_file.read_text().splitlines()
     assert len(lines) == 1
     entry = json.loads(lines[0])
@@ -124,6 +152,7 @@ def test_log_tokens_schrijft_naar_bestand(token_log_file, monkeypatch):
     assert entry["total_tokens"] == 150
     assert entry["call_type"] == "plan"
     assert entry["project"] == "test-project"
+    assert entry["prompt"] == "Maak een README"
     assert "cost_eur" in entry
     assert "ts" in entry
 
@@ -283,7 +312,7 @@ def test_get_pricing_default(monkeypatch):
 
 def test_get_pricing_from_env(monkeypatch):
     """Met TOKEN_PRICING in env → custom tabel."""
-    custom = {"my-model": {"input": 5.0, "output": 10.0}}
+    custom = {"my-model": [{"from": "2026-01-01", "to": None, "input": 5.0, "output": 10.0}]}
     monkeypatch.setenv("TOKEN_PRICING", json.dumps(custom))
     from regian.core.token_log import get_pricing
     assert get_pricing() == custom
@@ -301,3 +330,77 @@ def test_get_pricing_non_dict_json(monkeypatch):
     monkeypatch.setenv("TOKEN_PRICING", json.dumps([1, 2, 3]))
     from regian.core.token_log import get_pricing, _DEFAULT_PRICING
     assert get_pricing() == _DEFAULT_PRICING
+
+
+# ---------------------------------------------------------------------------
+# get_daily_evolution
+# ---------------------------------------------------------------------------
+
+def test_get_daily_evolution(token_log_file):
+    """Aggregatie per dag klopt en is chronologisch gesorteerd."""
+    import regian.core.token_log as tlm
+    entries = [
+        {"ts": "2026-03-01T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "", "call_type": "plan",
+         "input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_eur": 0.0},
+        {"ts": "2026-03-01T14:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "", "call_type": "plan",
+         "input_tokens": 200, "output_tokens": 100, "total_tokens": 300, "cost_eur": 0.0},
+        {"ts": "2026-03-02T09:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "", "call_type": "plan",
+         "input_tokens": 50, "output_tokens": 25, "total_tokens": 75, "cost_eur": 0.0},
+    ]
+    with open(token_log_file, "w", encoding="utf-8") as f:
+        for e in entries:
+            f.write(json.dumps(e) + "\n")
+    rows = tlm.get_daily_evolution()
+    assert len(rows) == 2
+    assert rows[0]["day"] == "2026-03-01"
+    assert rows[1]["day"] == "2026-03-02"
+    assert rows[0]["total_tokens"] == 450
+    assert rows[1]["total_tokens"] == 75
+
+
+def test_get_daily_evolution_leeg(token_log_file):
+    """Lege log geeft lege lijst."""
+    from regian.core.token_log import get_daily_evolution
+    assert get_daily_evolution() == []
+
+
+# ---------------------------------------------------------------------------
+# get_summary_by_prompt
+# ---------------------------------------------------------------------------
+
+def test_get_summary_by_prompt(token_log_file):
+    """Aggregatie per prompt klopt."""
+    import regian.core.token_log as tlm
+    entries = [
+        {"ts": "2026-03-01T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "Maak README", "call_type": "plan",
+         "input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_eur": 0.01},
+        {"ts": "2026-03-01T10:01:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "Maak README", "call_type": "agent",
+         "input_tokens": 200, "output_tokens": 100, "total_tokens": 300, "cost_eur": 0.02},
+        {"ts": "2026-03-01T11:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+         "project": "", "prompt": "List bestanden", "call_type": "plan",
+         "input_tokens": 50, "output_tokens": 25, "total_tokens": 75, "cost_eur": 0.005},
+    ]
+    with open(token_log_file, "w", encoding="utf-8") as f:
+        for e in entries:
+            f.write(json.dumps(e) + "\n")
+    rows = tlm.get_summary_by_prompt()
+    assert len(rows) == 2
+    readme_row = next(r for r in rows if r["prompt"] == "Maak README")
+    assert readme_row["calls"] == 2
+    assert readme_row["total_tokens"] == 450
+    assert readme_row["cost_eur"] == pytest.approx(0.03)
+    # Gesorteerd op kostprijs aflopend
+    assert rows[0]["prompt"] == "Maak README"
+
+
+def test_get_summary_by_prompt_geen_prompt(token_log_file):
+    """Entries zonder prompt worden gegroepeerd onder '(geen opdracht)'."""
+    import regian.core.token_log as tlm
+    tlm.log_tokens("gemini", "gemini-2.5-flash", 100, 50, project="", prompt="")
+    rows = tlm.get_summary_by_prompt()
+    assert any(r["prompt"] == "(geen opdracht)" for r in rows)
