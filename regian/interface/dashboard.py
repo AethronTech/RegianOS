@@ -2923,7 +2923,7 @@ def start_gui():
         _kc1.metric("Aanroepen", f"{totals['calls']:,}")
         _kc2.metric("Totaal tokens", f"{totals['total_tokens']:,}")
         _kc3.metric("Input tokens", f"{totals['input_tokens']:,}")
-        _kc4.metric("Kostprijs EUR", f"€ {totals['cost_eur']:.4f}")
+        _kc4.metric("Kostprijs EUR", f"€ {totals['cost_eur']:.6f}")
 
         st.markdown("---")
 
@@ -2938,7 +2938,7 @@ def start_gui():
                     "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
                 })[["Provider", "Model", "Aanroepen", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
                 _df_model["Kostprijs EUR"] = _df_model["Kostprijs EUR"].map(
-                    lambda x: f"€ {x:.4f}"
+                    lambda x: f"€ {x:.6f}"
                 )
                 st.dataframe(_df_model, use_container_width=True, hide_index=True)
             else:
@@ -2955,7 +2955,7 @@ def start_gui():
                     "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
                 })[["Project", "Aanroepen", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
                 _df_proj["Kostprijs EUR"] = _df_proj["Kostprijs EUR"].map(
-                    lambda x: f"€ {x:.4f}"
+                    lambda x: f"€ {x:.6f}"
                 )
                 st.dataframe(_df_proj, use_container_width=True, hide_index=True)
             else:
@@ -2973,7 +2973,7 @@ def start_gui():
                     "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
                 })[["Opdracht", "Provider/Model", "Aanroepen", "Laatste aanroep", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
                 _df_prompt["Kostprijs EUR"] = _df_prompt["Kostprijs EUR"].map(
-                    lambda x: f"€ {x:.4f}"
+                    lambda x: f"€ {x:.6f}"
                 )
                 st.dataframe(_df_prompt, use_container_width=True, hide_index=True)
             else:
@@ -2994,7 +2994,7 @@ def start_gui():
                     _df_month = _df_month.set_index("Maand")
                     st.bar_chart(_df_month[["Totaal tokens"]])
                     _df_month["Kostprijs EUR"] = _df_month["Kostprijs EUR"].map(
-                        lambda x: f"€ {x:.4f}"
+                        lambda x: f"€ {x:.6f}"
                     )
                     st.dataframe(_df_month, use_container_width=True)
                 else:
@@ -3011,7 +3011,7 @@ def start_gui():
                     _df_day = _df_day.set_index("Dag")
                     st.bar_chart(_df_day[["Totaal tokens"]])
                     _df_day["Kostprijs EUR"] = _df_day["Kostprijs EUR"].map(
-                        lambda x: f"€ {x:.4f}"
+                        lambda x: f"€ {x:.6f}"
                     )
                     st.dataframe(_df_day, use_container_width=True)
                 else:
