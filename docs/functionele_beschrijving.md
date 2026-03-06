@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.1.18 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.18 — Intern document
+**Versie:** 1.2.0 · **Datum:** 6 maart 2026  
+**Status:** Milestone 1.2.0 — Intern document
 
 ---
 
@@ -303,7 +303,7 @@ Templates worden gezocht in prioriteitsvolgorde:
 2. `<root>/.regian_workflow/<naam>.json`
 3. `regian/workflows/<naam>.json` (ingebouwde templates)
 
-Ingebouwde template: `van_idee_tot_mvp` (4 fasen: PRD → taken → implementatie → review).
+Ingebouwde template: `van_idee_tot_mvp` (5 fasen: PRD → taakopsplitsing → implementatie → test & validatie → review).
 
 ### 8.5 BPMN-compatibiliteit
 
@@ -316,6 +316,7 @@ De run-weergave toont per run:
 - **Artifacts** — altijd uitgeklapt bovenaan de run; inhoud direct zichtbaar
 - **Uitgevoerde taken** — elke taak (`**Taak X/Y:**`) is een inklapbare expander; standaard ingeklapt
 - **Goedkeuringscontext** — bij `STATUS_WAITING` verschijnt een infobanner met fase-naam, -index en -type boven de goedkeuringsacties
+- **Projectnaam** — elke actieve run toont de naam van het bijbehorende project
 
 ### 8.7 Beschikbare slash-commands
 
@@ -384,12 +385,36 @@ Regian detecteert automatisch:
 | Mode | Gedrag |
 |---|---|
 | **Build/test** | Wordt synchroon uitgevoerd (timeout 120s), output getoond in expander |
-| **Live server** (npm dev, npm start, python main.py) | Niet automatisch gestart; toont commando + localhost-link |
+| **Live server** (npm dev, npm start, python main.py) | Start/stop rechtstreeks vanuit Regian via `▶️ Start` / `🔴 Stop server`; PID bijgehouden in sessie |
 
-### 10.3 Automatisch aanmaken
+### 10.3 Server log
+
+Serveruitvoer (stdout + stderr) wordt weggeschreven naar `<project>/.regian_server.log`. Regian toont de laatste 200 regels in een logviewer in het dashboard zolang de server actief is. De knop **🗑️ Wis log** maakt het logbestand leeg.
+
+### 10.4 Poortdetectie
+
+De poort wordt automatisch herkend via de `-p`-vlag of `--port`-optie in de `package.json`-scriptbody. Fallback-poorten: 5173 (Vite), 3000 (React/Next), 8080 (overig). De browser-link verwijst steeds naar `http://127.0.0.1:<poort>` (IPv6-safe).
+
+### 10.5 Automatisch aanmaken
 
 Als er geen script gevonden wordt: de knop **🔨 Maak build.sh aan** laat de AI een passend script genereren op basis van de projectbestanden.
 
 ---
 
-*Regian OS — Milestone 1.1.18 · Intern document · 3 maart 2026*
+## 11. Verbeteringen in Milestone 1.2.0
+
+### 11.1 Agent-context bij ticket-fixes
+
+`fix_ticket()` leest automatisch tot 30 bronbestanden uit het actieve project en geeft deze als volledige broncode mee aan de agent. Hierdoor kan de agent bestaande implementaties analyseren en gerichte patches schrijven in plaats van bestanden opnieuw aan te maken.
+
+### 11.2 Agent log in ticket review
+
+In de **👀 Review**-kolom van het Kanban-board toont elk ticket nu een inklapbaar overzicht `📋 Agent log (N stappen)` met alle tool-aanroepen die de agent deed tijdens de fix. Zo kan je precies zien wat de agent heeft gedaan zonder de actie-log te raadplegen.
+
+### 11.3 Template van_idee_tot_mvp — 5 fasen
+
+De ingebouwde template bevat nu een extra fase **Test & Validatie** (na de implementatiefase). Deze fase vraagt de agent om de testrunner te draaien en bevindingen te rapporteren, vóór de eindreview door de gebruiker.
+
+---
+
+*Regian OS — Milestone 1.2.0 · Intern document · 6 maart 2026*

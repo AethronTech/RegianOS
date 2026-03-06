@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.1.18 · **Datum:** 3 maart 2026
+**Versie:** 1.2.0 · **Datum:** 6 maart 2026
 
 ---
 
@@ -596,12 +596,13 @@ Annuleer:
 
 ### 11.4 Ingebouwde template: van_idee_tot_mvp
 
-De meegeleverde template `van_idee_tot_mvp` bevat vier fasen:
+De meegeleverde template `van_idee_tot_mvp` bevat vijf fasen:
 
 1. **Product Architect** (llm_prompt + goedkeuring) — schrijft een PRD
-2. **Lead Developer** (llm_prompt + goedkeuring) — breakdown in taken
-3. **AI Implementatie** (task_loop + goedkeuring) — voert alle taken uit via de agent
-4. **Review** (human_checkpoint) — eindcontrole door de gebruiker
+2. **Lead Developer — Taakopsplitsing** (llm_prompt + goedkeuring) — breakdown in taken
+3. **AI Agent — Implementatie** (task_loop + goedkeuring) — voert alle taken uit via de agent
+4. **Test & Validatie** (llm_prompt + goedkeuring) — voert tests uit en rapporteert bevindingen
+5. **Review & Iteratie** (human_checkpoint) — eindcontrole door de gebruiker
 
 ### 11.5 Eigen template maken
 
@@ -645,6 +646,8 @@ Tijdens de fix zie je het ticket in **🔄 In Progress**. Na afloop verschijnt h
 ### 12.4 Beoordelen
 
 In de Review-kolom per ticket:
+- **🤖 AI samenvatting** — een korte samenvatting van wat de agent heeft uitgevoerd (uit `ai_output`)
+- **📋 Agent log (N stappen)** — inklapbaar overzicht van alle tool-aanroepen die de agent deed tijdens de fix, met argumenten en resultaat per stap
 - **✅ Done** — goedgekeurd, klaar
 - **🔙 To Do** + optionele opmerking — terugsturen met context (de AI gebruikt deze opmerking bij een tweede poging)
 
@@ -668,9 +671,22 @@ Regian detecteert automatisch aanwezige scripts:
 - `package.json` → npm scripts (build, dev, start, test)
 - `requirements.txt` / `main.py` → pytest / python main.py
 
-Voor build/test-scripts: klik **▶️ Uitvoeren** — de output verschijnt in een uitklapbaar venster.
+Voor build/test-scripts: klik **▶️ Uitvoeren** — de output verschijnt in een uitklapbaar venster (timeout 120s).
 
-Voor live servers (npm dev, npm start): Regian toont het commando + een **🌐 Open localhost**-knop. Start de server handmatig in een terminal (Regian zelf stopt tijdens uitvoering).
+### Live servers starten en stoppen
+
+Voor live servers (npm dev, npm start, python main.py) kun je de server rechtstreeks vanuit Regian beheren:
+
+- **▶️ Start** — start de server als achtergrondproces (via `subprocess.Popen`); de PID wordt bijgehouden in de sessie
+- **✅ Server actief (PID …)** — groen statuslabel terwijl de server draait
+- **🔴 Stop server** — stuurt een `SIGTERM` naar het serverproces
+- **🌐 Open 127.0.0.1:PORT** — opent de browser naar het herkende poortnummer
+
+Regian detecteert automatisch de poort via de `-p`-vlag of `--port`-optie in het `package.json`-script. Fallback-poorten: 5173 (Vite), 3000 (React/Next), 8080 (overig).
+
+### Server log viewer
+
+Serveruitvoer (stdout + stderr) wordt weggeschreven naar `.regian_server.log` in de projectmap. Zolang de server draait, toont Regian automatisch de laatste 200 regels in een uitklapbaar venster **📋 Server log**. Klik **🗑️ Wis log** om het logbestand leeg te maken.
 
 Geen scripts gevonden? Klik **🔨 Maak build.sh aan** — de AI genereert een passend script op basis van de projectstructuur.
 
@@ -683,4 +699,4 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.1.18 · 3 maart 2026*
+*Regian OS — Milestone 1.2.0 · 6 maart 2026*

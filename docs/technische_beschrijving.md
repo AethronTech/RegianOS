@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.1.18 · **Datum:** 3 maart 2026  
-**Status:** Milestone 1.1.18 — Intern document
+**Versie:** 1.2.0 · **Datum:** 6 maart 2026  
+**Status:** Milestone 1.2.0 — Intern document
 
 ---
 
@@ -568,17 +568,29 @@ Kanban-gebaseerde bugtracker per project. Tickets worden opgeslagen als JSON-arr
 | `fix_ticket(id)` | AI-agent lost ticket op: `todo → in_progress → review` |
 | `fix_all_tickets()` | Alle To Do-tickets sequentieel laten fixen |
 
-**Integratie:** `fix_ticket()` importeert `OrchestratorAgent` lazy (uit `regian.core.agent`) om circulaire imports te vermijden. De agent bouwt een taakbeschrijving op basis van `title`, `description` en de laatste `comment`, en slaat de eerste 2000 tekens van de uitvoer op als `ai_output`.
+**Integratie:** `fix_ticket()` importeert `OrchestratorAgent` lazy (uit `regian.core.agent`) om circulaire imports te vermijden. De agent bouwt een taakomschrijving op basis van `title`, `description` en de laatste `comment`. Aanvullend leest `fix_ticket()` **tot 30 bronbestanden** uit het actieve projectpad (extensies: `.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.html`, `.css`, `.json`, `.md`, `.sh`; max. 40 KB per bestand) en voegt die als volledige broncode toe aan de agent-context — zodat de agent bestaande bestanden kan analyseren en patches op de correcte locaties kan schrijven. Mappen als `node_modules`, `.git`, `__pycache__`, `dist` en `build` worden genegeerd. De eerste 2000 tekens van de uitvoer worden opgeslagen als `ai_output`.
 
 ### 14.2 Dashboard: `🐛 Tickets`-tab
 
 Visueel Kanban-board met 4 kolommen in het workflow-scherm. Knop **🤖 Fix alle** triggert `fix_all_tickets()` met `st.spinner`.
 
+In de **👀 Review**-kolom toont elk ticket:
+- **🤖 AI samenvatting** — `_tkt["ai_output"]`, ingeklapt via `st.expander`
+- **📋 Agent log (N stappen)** — haalt via `get_log_grouped()` de stappen op die horen bij de `group_id = ticket["id"]`; toont per stap: tool-naam, argumenten (preview 120 tekens per waarde) en resultaat (max. 400 tekens); ✅/❌ icoon op basis van resultaat
+
 ### 14.3 Dashboard: `▶️ Project uitvoeren`-tab
 
 Detecteert build/run-scripts in het actieve projectpad en biedt:
 - Synchrone uitvoering (build, test, make) met `subprocess.run(timeout=120)`
-- Live-server modus (npm dev, npm start, python main.py): toont commando + localhost-link zonder automatisch te starten
+- **Live-server modus** (npm dev, npm start, python main.py): server beheer volledig vanuit Regian:
+  - `subprocess.Popen(..., shell=True, stdout=logf, stderr=logf)` start de server als achtergrondproces
+  - PID opgeslagen in `st.session_state[f"srv_pid_{project}_{cmd}"]`
+  - Liveness-controle via `os.kill(pid, 0)` bij elke rendering-cyclus
+  - Stop via `os.kill(pid, signal.SIGTERM)`
+  - Serveruitvoer weggeschreven naar `<project>/.regian_server.log`
+  - Logviewer: laatste 200 regels via `splitlines()[-200:]`, auto-uitklapt terwijl server actief is
+  - Poortdetectie: regex `r"-p\s+(\d+)|--port[= ](\d+)|:(\d{4,5})"` op de script-body in `package.json`; fallback 5173/3000/8080
+  - Server-link naar `http://127.0.0.1:<poort>` (IPv6-safe)
 - Fallback: AI genereert een `build.sh` via `OrchestratorAgent`
 
 ---
@@ -594,4 +606,4 @@ Detecteert build/run-scripts in het actieve projectpad en biedt:
 
 ---
 
-*Regian OS — Milestone 1.1.18 · Intern document · 3 maart 2026*
+*Regian OS — Milestone 1.2.0 · Intern document · 6 maart 2026*
