@@ -919,8 +919,8 @@ def start_gui():
         st.session_state.active_project = get_active_project()
 
     # ── Tabs ──────────────────────────────────────────────────
-    tab_chat, tab_help, tab_cron, tab_log, tab_settings, tab_workflows = st.tabs([
-        "💬 Chat", "📖 Help & Commands", "📅 Cron", "📋 Log", "⚙️ Instellingen", "🔄 Workflows"
+    tab_chat, tab_help, tab_cron, tab_log, tab_settings, tab_workflows, tab_tokens = st.tabs([
+        "💬 Chat", "📖 Help & Commands", "📅 Cron", "📋 Log", "⚙️ Instellingen", "🔄 Workflows", "📊 Tokens"
     ])
 
     # ── CHAT TAB ──────────────────────────────────────────────
@@ -2843,6 +2843,104 @@ def start_gui():
                     if "wf_editor_sel" in st.session_state:
                         del st.session_state["wf_editor_sel"]
                     st.rerun()
+
+    # ── TOKENS TAB ────────────────────────────────────────────
+    with tab_tokens:
+        st.header("📊 Token-verbruik & Kosten")
+        from regian.core.token_log import (
+            get_totals, get_summary_by_model, get_summary_by_project,
+            get_monthly_evolution, clear_token_log, get_pricing, set_pricing,
+        )
+        import json as _tkjson
+
+        totals = get_totals()
+
+        # KPI-rij
+        _kc1, _kc2, _kc3, _kc4 = st.columns(4)
+        _kc1.metric("Aanroepen", f"{totals['calls']:,}")
+        _kc2.metric("Totaal tokens", f"{totals['total_tokens']:,}")
+        _kc3.metric("Input tokens", f"{totals['input_tokens']:,}")
+        _kc4.metric("Kostprijs EUR", f"€ {totals['cost_eur']:.4f}")
+
+        st.markdown("---")
+
+        # Per provider / model
+        with st.expander("📋 Per provider / model", expanded=True):
+            model_rows = get_summary_by_model()
+            if model_rows:
+                import pandas as _tkpd
+                _df_model = _tkpd.DataFrame(model_rows).rename(columns={
+                    "provider": "Provider", "model": "Model", "calls": "Aanroepen",
+                    "input_tokens": "Input tokens", "output_tokens": "Output tokens",
+                    "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
+                })[["Provider", "Model", "Aanroepen", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
+                _df_model["Kostprijs EUR"] = _df_model["Kostprijs EUR"].map(
+                    lambda x: f"€ {x:.4f}"
+                )
+                st.dataframe(_df_model, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nog geen tokendata beschikbaar.")
+
+        # Per project
+        with st.expander("🗂️ Per project", expanded=False):
+            proj_rows = get_summary_by_project()
+            if proj_rows:
+                import pandas as _tkpd2
+                _df_proj = _tkpd2.DataFrame(proj_rows).rename(columns={
+                    "project": "Project", "calls": "Aanroepen",
+                    "input_tokens": "Input tokens", "output_tokens": "Output tokens",
+                    "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
+                })[["Project", "Aanroepen", "Input tokens", "Output tokens", "Totaal tokens", "Kostprijs EUR"]]
+                _df_proj["Kostprijs EUR"] = _df_proj["Kostprijs EUR"].map(
+                    lambda x: f"€ {x:.4f}"
+                )
+                st.dataframe(_df_proj, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nog geen projectdata beschikbaar.")
+
+        # Evolutie per maand
+        with st.expander("📈 Evolutie per maand", expanded=False):
+            monthly = get_monthly_evolution()
+            if monthly:
+                import pandas as _tkpd3
+                _df_month = _tkpd3.DataFrame(monthly).rename(columns={
+                    "month": "Maand", "calls": "Aanroepen",
+                    "total_tokens": "Totaal tokens", "cost_eur": "Kostprijs EUR",
+                })
+                _df_month = _df_month.set_index("Maand")
+                st.bar_chart(_df_month[["Totaal tokens"]])
+                _df_month["Kostprijs EUR"] = _df_month["Kostprijs EUR"].map(
+                    lambda x: f"€ {x:.4f}"
+                )
+                st.dataframe(_df_month, use_container_width=True)
+            else:
+                st.info("Nog geen maandelijkse data beschikbaar.")
+
+        # Prijsinstellingen
+        with st.expander("⚙️ Prijsinstellingen (EUR / 1M tokens)", expanded=False):
+            current_pricing = get_pricing()
+            _pricing_txt = st.text_area(
+                "Prijslijst (JSON)",
+                value=_tkjson.dumps(current_pricing, indent=2, ensure_ascii=False),
+                height=300,
+                key="token_pricing_editor",
+            )
+            if st.button("💾 Prijzen opslaan", key="token_pricing_save"):
+                try:
+                    _new_pricing = _tkjson.loads(_pricing_txt)
+                    set_pricing(_new_pricing)
+                    st.success("✅ Prijzen opgeslagen.")
+                    st.rerun()
+                except _tkjson.JSONDecodeError as _pje:
+                    st.error(f"❌ Ongeldige JSON: {_pje}")
+
+        st.markdown("---")
+
+        # Token-log wissen
+        if st.button("🗑️ Wis token-log", key="clear_token_log"):
+            clear_token_log()
+            st.success("✅ Token-log gewist.")
+            st.rerun()
 
 
 if __name__ == "__main__":

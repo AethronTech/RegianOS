@@ -1,6 +1,6 @@
 # Regian OS — Gebruikershandleiding
 
-**Versie:** 1.2.0 · **Datum:** 6 maart 2026
+**Versie:** 1.3.0 · **Datum:** 7 maart 2026
 
 ---
 
@@ -17,7 +17,8 @@
 9. [Beveiliging & HITL](#beveiliging-hitl)  
 10. [Projectbeheer](#projectbeheer)  
 11. [Workflows — Van Idee tot MVP](#workflows-van-idee-tot-mvp)  
-12. [Tips & Veelgestelde Vragen](#tips-veelgestelde-vragen)
+12. [Token-verbruik & Kosten](#token-verbruik-kosten)  
+13. [Tips & Veelgestelde Vragen](#tips-veelgestelde-vragen)
 
 ---
 
@@ -699,4 +700,58 @@ Workflows zijn compatibel met [bpmn.io](https://bpmn.io):
 
 ---
 
-*Regian OS — Milestone 1.2.0 · 6 maart 2026*
+---
+
+## Token-verbruik & Kosten
+
+De tab **📊 Tokens** geeft real-time inzicht in het LLM-verbruik en de bijhorende kostprijs in euro.
+
+### Wat zie je?
+
+| Sectie | Inhoud |
+|---|---|
+| **KPI-rij** | Totaal aanroepen, totaal tokens (input + output), kostprijs EUR |
+| **Per provider / model** | Uitsplitsing per modelvariant met token-aantallen en prijs |
+| **Per project** | Token-verbruik per actief project (of «geen project») |
+| **Evolutie per maand** | Staafgrafiek + tabel met maandelijkse trends |
+| **Prijsinstellingen** | Bewerkbare JSON-prijslijst (EUR / 1 000 000 tokens) |
+
+### Prijslijst aanpassen
+
+Open **⚙️ Prijsinstellingen** onderaan de tab. De standaard pricing is gebaseerd op Google Gemini-tarieven (maart 2026). Ollama-modellen (lokaal) zijn gratis (0,00 €).
+
+Voorbeeldformaat:
+
+```json
+{
+  "gemini-2.5-flash": { "input": 0.075, "output": 0.30 },
+  "gemini-2.5-pro":   { "input": 1.25,  "output": 5.00 },
+  "mistral":          { "input": 0.0,   "output": 0.0  }
+}
+```
+
+Klik **💾 Prijzen opslaan** — de waarden worden opgeslagen in `.env` als `TOKEN_PRICING`.
+
+### Token-log wissen
+
+Via de knop **🗑️ Wis token-log** onderaan de tab wordt het logbestand (`regian_token_log.jsonl`) volledig leeggemaakt.
+
+### Logbestand
+
+Het logbestand bevindt zich in de projectroot naast `regian_action_log.jsonl`:
+
+```
+regian_token_log.jsonl
+```
+
+Elk LLM-aanroep levert één JSONL-regel:
+
+```json
+{"ts": "2026-03-07T10:00:00", "provider": "gemini", "model": "gemini-2.5-flash",
+ "project": "mijn-app", "call_type": "plan", "input_tokens": 1234,
+ "output_tokens": 567, "total_tokens": 1801, "cost_eur": 0.00045}
+```
+
+---
+
+*Regian OS — Milestone 1.3.0 · 7 maart 2026*

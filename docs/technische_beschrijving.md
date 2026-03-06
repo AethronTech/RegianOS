@@ -1,7 +1,7 @@
 # Regian OS — Technische Beschrijving
 
-**Versie:** 1.2.0 · **Datum:** 6 maart 2026  
-**Status:** Milestone 1.2.0 — Intern document
+**Versie:** 1.3.0 · **Datum:** 7 maart 2026  
+**Status:** Milestone 1.3.0 — Intern document
 
 ---
 
@@ -58,6 +58,7 @@ RegianOS/
 │   │   ├── __init__.py
 │   │   ├── agent.py               # SkillRegistry + Orchestrator + RegianAgent
 │   │   ├── scheduler.py           # APScheduler-wrapper
+│   │   ├── token_log.py           # JSONL token-verbruik logger (REG-2)
 │   │   └── action_log.py          # JSONL-logger
 │   ├── interface/
 │   │   ├── dashboard.py           # Streamlit GUI (~900 regels)
@@ -76,6 +77,7 @@ RegianOS/
         └── skills.py              # Skillet meta-skill
 └── tests/
     ├── conftest.py                # Fixtures: tmp_root, isolate_env
+    ├── test_core_token_log.py     # Token-log tests (23 tests, REG-2)
     ├── test_core_action_log.py    # 26 tests
     ├── test_core_agent.py         # OrchestratorAgent tests
     ├── test_core_scheduler.py     # Scheduler CRUD tests
@@ -595,6 +597,60 @@ Detecteert build/run-scripts in het actieve projectpad en biedt:
 
 ---
 
+## 15. Token-verbruik module (REG-2, Milestone 1.3.0)
+
+### 15.1 Opslag
+
+Elke LLM-aanroep wordt opgeslagen in `regian_token_log.jsonl` (projectroot, naast `regian_action_log.jsonl`). De drie call-sites zijn:
+
+| Call-site | `call_type` | Klasse |
+|---|---|---|
+| `OrchestratorAgent.plan()` | `"plan"` | Plan-generatie (JSON stappenlijst) |
+| `OrchestratorAgent.run()` | `"run"` | Directe LLM-antwoorden (geen tools) |
+| `RegianAgent.ask()` | `"agent"` | Tool-selectie + antwoorden in agent-loop |
+
+JSON-structuur per entry:
+
+```json
+{
+  "ts":            "2026-03-07T10:00:00",
+  "provider":      "gemini",
+  "model":         "gemini-2.5-flash",
+  "project":       "mijn-app",
+  "call_type":     "plan",
+  "input_tokens":  1234,
+  "output_tokens":  567,
+  "total_tokens":  1801,
+  "cost_eur":      0.00045
+}
+```
+
+### 15.2 Token-extractie
+
+`_extract_tokens(response)` ondersteunt drie response-formaten:
+1. `response.usage_metadata` als `dict` (LangChain generiek)
+2. `response.usage_metadata` als object met attributen
+3. `response.response_metadata["usage_metadata"]` (Gemini-specifiek fallback)
+
+Bij geen metadata: `(0, 0)`.
+
+### 15.3 Pricing-tabel
+
+Prijzen (EUR per 1 000 000 tokens) zijn geconfigureerd in `_DEFAULT_PRICING` en overschrijfbaar via `TOKEN_PRICING` in `.env`. Kostprijs-berekening gebruikt prefix-match: `gemini-2.5-flash-001` matched op `gemini-2.5-flash`. Ollama-modellen zijn altijd 0,00 €.
+
+### 15.4 Configuratie (.env)
+
+| Variabele | Standaard | Beschrijving |
+|---|---|---|
+| `TOKEN_LOG_FILE` | `regian_token_log.jsonl` | Bestandsnaam van het logbestand |
+| `TOKEN_PRICING` | _(ingebouwde tabel)_ | JSON-string met prijzen per model |
+
+### 15.5 Thread-safety
+
+Schrijven naar het logbestand verloopt via `threading.Lock()` (`_lock`), identiek aan `action_log.py`.
+
+---
+
 ## 12. Bekende beperkingen (Milestone 1)
 
 | Beperking | Beschrijving |
@@ -606,4 +662,4 @@ Detecteert build/run-scripts in het actieve projectpad en biedt:
 
 ---
 
-*Regian OS — Milestone 1.2.0 · Intern document · 6 maart 2026*
+*Regian OS — Milestone 1.3.0 · Intern document · 7 maart 2026*

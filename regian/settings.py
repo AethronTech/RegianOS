@@ -284,3 +284,31 @@ def set_backup_dir(path: str) -> str:
     set_key(str(ENV_FILE), "BACKUP_DIR", resolved)
     os.environ["BACKUP_DIR"] = resolved
     return resolved
+
+
+# ---------------------------------------------------------------------------
+# Token-log instellingen
+# ---------------------------------------------------------------------------
+
+def get_token_log_file_name() -> str:
+    """Geeft de bestandsnaam van het token-logbestand."""
+    return os.getenv("TOKEN_LOG_FILE", "regian_token_log.jsonl")
+
+
+def set_token_log_file_name(name: str) -> str:
+    """Sla de bestandsnaam van het token-logbestand op in .env."""
+    set_key(str(ENV_FILE), "TOKEN_LOG_FILE", name)
+    os.environ["TOKEN_LOG_FILE"] = name
+    return name
+
+
+def get_token_pricing() -> str:
+    """Geeft de JSON-string met prijzen per model (EUR per 1M tokens)."""
+    return os.getenv("TOKEN_PRICING", "")
+
+
+def set_token_pricing(json_str: str) -> str:
+    """Sla de JSON-prijsstring op in .env."""
+    set_key(str(ENV_FILE), "TOKEN_PRICING", json_str)
+    os.environ["TOKEN_PRICING"] = json_str
+    return json_str

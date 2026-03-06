@@ -1,7 +1,7 @@
 # Regian OS — Functionele Beschrijving
 
-**Versie:** 1.2.0 · **Datum:** 6 maart 2026  
-**Status:** Milestone 1.2.0 — Intern document
+**Versie:** 1.3.0 · **Datum:** 7 maart 2026  
+**Status:** Milestone 1.3.0 — Intern document
 
 ---
 
@@ -218,7 +218,7 @@ Elke LLM-gegenereerde respons (plan-uitvoer + directe LLM-antwoorden) wordt auto
 
 ### 4.1 Grafische Cockpit (Streamlit)
 
-Vijf tabs:
+Zes tabs:
 
 | Tab | Functie |
 |---|---|
@@ -227,6 +227,8 @@ Vijf tabs:
 | 📅 Cron | Aanmaken en beheren van geplande taken |
 | 📋 Log | Actie-log in chronologische en gegroepeerde weergave |
 | ⚙️ Instellingen | Alle configuratieparameters |
+| 🔄 Workflows | Workflow-beheer, tickets en project-uitvoering |
+| 📊 Tokens | Token-verbruik, kostprijs en pricing-beheer |
 
 **Zijbalk**: Naast de Reset Chat-knop toont de zijbalk een **projectselector** (dropdown), een **kennisbank-widget** (bestanden + grootte), en een **notificatie-indicator** voor cron-taakmeldingen. Het actieve project wordt getoond met type-icoon (bijv. `💻 mijn-app`). Bij projectwisseling wordt de agent herladen en de sessie herstart.
 
@@ -270,7 +272,7 @@ Geen configuratie, geen registratie — het systeem ontdekt de skill automatisch
 
 ## 7. Kwaliteit en betrouwbaarheid
 
-- **Testdekking**: ≥ 80% (389 tests, geautomatiseerd via pytest)
+- **Testdekking**: ≥ 80% (486 tests, geautomatiseerd via pytest)
 - **Logretentie**: maximaal 500 entries (oudste worden automatisch verwijderd)
 - **Timeout**: shell-commando's worden na 30 seconden afgebroken
 - **Path-traversal**: bestands-skills blokkeren paden buiten de werkmap
@@ -417,4 +419,51 @@ De ingebouwde template bevat nu een extra fase **Test & Validatie** (na de imple
 
 ---
 
-*Regian OS — Milestone 1.2.0 · Intern document · 6 maart 2026*
+---
+
+## 12. Verbeteringen in Milestone 1.3.0 (REG-2)
+
+### 12.1 Token-verbruik & kostprijs tracking
+
+Elke LLM-aanroep in `OrchestratorAgent.plan()`, `OrchestratorAgent.run()` en `RegianAgent.ask()` wordt voortaan geregistreerd in `regian_token_log.jsonl`.
+
+Per entry:
+- Timestamp, provider, model, actief project, call-type
+- Input tokens, output tokens, totaal tokens
+- Kostprijs in EUR (berekend via configureerbare pricing-tabel)
+
+### 12.2 Token-log module (`regian/core/token_log.py`)
+
+Nieuwe core-module met de volgende functies:
+
+| Functie | Beschrijving |
+|---|---|
+| `log_tokens()` | Schrijft één entry naar het JSONL-logbestand |
+| `_extract_tokens(response)` | Haalt token-aantallen op uit een LangChain response |
+| `_calc_cost(model, in, out)` | Berekent EUR-kostprijs via prefix-match pricing |
+| `get_summary_by_model()` | Aggregatie per provider/model, gesorteerd op kostprijs |
+| `get_summary_by_project()` | Aggregatie per project, gesorteerd op kostprijs |
+| `get_monthly_evolution()` | Maandelijkse evolutie, chronologisch gesorteerd |
+| `get_totals()` | Globale totalen (tokens, kostprijs, aanroepen) |
+| `get_pricing()` / `set_pricing()` | Lees/schrijf de pricing-tabel (EUR/1M tokens) |
+| `clear_token_log()` | Wis het logbestand |
+
+### 12.3 Dashboard — 📊 Tokens-tab
+
+Nieuwe zevende tab in de cockpit met:
+- **KPI-rij**: 4 metrics (aanroepen, totaal/input tokens, kostprijs EUR)
+- **Per provider/model**: tabel met uitsplitsing
+- **Per project**: tabel met uitsplitsing per actief project
+- **Evolutie per maand**: staafgrafiek + overzichtstabel
+- **Prijsinstellingen**: editable JSON-editor voor de pricing-tabel
+- **Wis token-log**: knop om het logbestand te leegmaken
+
+### 12.4 Configuratie
+
+Nieuwe .env-variabelen:
+- `TOKEN_PRICING`: JSON-string met prijzen per model (EUR/1M tokens)
+- `TOKEN_LOG_FILE`: bestandsnaam van het token-logbestand (standaard `regian_token_log.jsonl`)
+
+---
+
+*Regian OS — Milestone 1.3.0 · Intern document · 7 maart 2026*

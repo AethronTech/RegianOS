@@ -485,3 +485,41 @@ class TestAgentNameSettings:
         monkeypatch.setenv("AGENT_NAME", "")
         from regian.settings import get_agent_name
         assert get_agent_name() == "Reggy"
+
+
+# ── Token-log settings ─────────────────────────────────────────────────────────
+
+class TestTokenSettings:
+    def test_get_token_log_file_default(self, monkeypatch):
+        monkeypatch.delenv("TOKEN_LOG_FILE", raising=False)
+        from regian.settings import get_token_log_file_name
+        assert get_token_log_file_name() == "regian_token_log.jsonl"
+
+    def test_get_token_log_file_custom(self, monkeypatch):
+        monkeypatch.setenv("TOKEN_LOG_FILE", "mijn_tokens.jsonl")
+        from regian.settings import get_token_log_file_name
+        assert get_token_log_file_name() == "mijn_tokens.jsonl"
+
+    def test_set_token_log_file_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_token_log_file_name("custom.jsonl")
+        assert os.environ.get("TOKEN_LOG_FILE") == "custom.jsonl"
+        assert "custom.jsonl" in tmp_env_file.read_text()
+
+    def test_get_token_pricing_default_leeg(self, monkeypatch):
+        monkeypatch.delenv("TOKEN_PRICING", raising=False)
+        from regian.settings import get_token_pricing
+        assert get_token_pricing() == ""
+
+    def test_get_token_pricing_custom(self, monkeypatch):
+        custom = json.dumps({"gemini-2.5-flash": {"input": 0.075, "output": 0.30}})
+        monkeypatch.setenv("TOKEN_PRICING", custom)
+        from regian.settings import get_token_pricing
+        assert get_token_pricing() == custom
+
+    def test_set_token_pricing_schrijft_naar_env(self, monkeypatch, tmp_env_file):
+        custom = json.dumps({"my-model": {"input": 1.0, "output": 2.0}})
+        s = _patch_env_file(tmp_env_file, monkeypatch)
+        s.set_token_pricing(custom)
+        assert os.environ.get("TOKEN_PRICING") == custom
+        assert "my-model" in tmp_env_file.read_text()

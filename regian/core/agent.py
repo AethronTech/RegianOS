@@ -6,6 +6,7 @@ import importlib
 import pkgutil
 from dotenv import load_dotenv
 from regian.core.action_log import log_action
+from regian.core.token_log import log_tokens, _extract_tokens
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -294,6 +295,19 @@ class OrchestratorAgent:
         content = content.strip()
         content = re.sub(r"^```[a-z]*\n?", "", content)
         content = re.sub(r"\n?```$", "", content)
+        # -- token logging --
+        try:
+            from regian.settings import get_llm_provider, get_llm_model
+            _inp, _out = _extract_tokens(response)
+            log_tokens(
+                provider=get_llm_provider(),
+                model=get_llm_model(),
+                input_tokens=_inp,
+                output_tokens=_out,
+                call_type="plan",
+            )
+        except Exception:
+            pass
         try:
             plan = json.loads(content)
             if isinstance(plan, list):
@@ -331,6 +345,19 @@ class OrchestratorAgent:
                     SystemMessage(content=system),
                     HumanMessage(content=prompt),
                 ])
+                # -- token logging --
+                try:
+                    from regian.settings import get_llm_provider, get_llm_model
+                    _inp, _out = _extract_tokens(response)
+                    log_tokens(
+                        provider=get_llm_provider(),
+                        model=get_llm_model(),
+                        input_tokens=_inp,
+                        output_tokens=_out,
+                        call_type="run",
+                    )
+                except Exception:
+                    pass
                 content = response.content
                 if isinstance(content, list):
                     content = " ".join(str(c) for c in content if c)
@@ -402,6 +429,19 @@ class RegianAgent:
                         results.append(result)
                         messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
                     return "\n\n".join(results)
+                # -- token logging --
+                try:
+                    from regian.settings import get_llm_provider, get_llm_model
+                    _inp, _out = _extract_tokens(response)
+                    log_tokens(
+                        provider=get_llm_provider(),
+                        model=get_llm_model(),
+                        input_tokens=_inp,
+                        output_tokens=_out,
+                        call_type="agent",
+                    )
+                except Exception:
+                    pass
                 content = response.content
                 if isinstance(content, list):
                     content = " ".join(str(c) for c in content if c)
