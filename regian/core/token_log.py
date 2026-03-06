@@ -346,6 +346,7 @@ def get_summary_by_prompt() -> list[dict]:
     """
     agg: dict[str, dict] = {}
     models_seen: dict[str, set] = {}
+    projects_seen: dict[str, set] = {}
     for e in get_all_entries():
         raw = (e.get("prompt") or "").strip()
         key = raw[:200] if raw else "(geen opdracht)"
@@ -360,6 +361,7 @@ def get_summary_by_prompt() -> list[dict]:
                 "last_ts": "",
             }
             models_seen[key] = set()
+            projects_seen[key] = set()
         agg[key]["input_tokens"]  += e.get("input_tokens", 0)
         agg[key]["output_tokens"] += e.get("output_tokens", 0)
         agg[key]["total_tokens"]  += e.get("total_tokens", 0)
@@ -372,8 +374,11 @@ def get_summary_by_prompt() -> list[dict]:
         model    = e.get("model", "")
         if provider or model:
             models_seen[key].add(f"{provider}/{model}" if provider else model)
+        project = (e.get("project") or "").strip()
+        projects_seen[key].add(project if project else "(geen project)")
     for key, row in agg.items():
-        row["modellen"] = ", ".join(sorted(models_seen[key]))
+        row["modellen"]  = ", ".join(sorted(models_seen[key]))
+        row["projecten"] = ", ".join(sorted(projects_seen[key]))
     return sorted(agg.values(), key=lambda x: x["cost_eur"], reverse=True)
 
 
