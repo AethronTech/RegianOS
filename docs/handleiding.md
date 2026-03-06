@@ -288,6 +288,10 @@ Typ `/` in het chatvenster om de autocomplete-dropdown te activeren met een voll
 > Backups worden opgeslagen in `RegianBackups/` naast de werkmap (configureerbaar). Het maximum aantal te bewaren backups is instelbaar in de **⚙️ Instellingen**-tab (standaard: 5).  
 > Stel een automatische dagelijkse backup in via de **📅 Cron**-tab: schema `dagelijks om 02:00`, commando `/backup_workspace`.
 
+**Werkmap herstellen via de dashboard:**  
+Onder **⚙️ Instellingen → Backup** staat de sectie **🔄 Werkmap herstellen vanuit backup**. Kies een backup uit de dropdown (nieuwste bovenaan), vink de bevestigingscheckbox aan en klik op **🔄 Restore uitvoeren**. De geselecteerde backup wordt uitgepakt naar de werkmap.  
+⚠️ Let op: bestaande bestanden met dezelfde naam worden overschreven.
+
 ---
 
 ## Cron — Geplande Taken

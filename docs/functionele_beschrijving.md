@@ -108,6 +108,7 @@ Alle instellingen zijn aanpasbaar via de ⚙️-tab en worden persistent opgesla
 - Naam van het actie-logbestand (`LOG_FILE_NAME`, standaard `regian_action_log.jsonl`)
 - Naam van het jobs-bestand (`JOBS_FILE_NAME`, standaard `regian_jobs.json`)
 - Backup-instellingen: max. te bewaren backups (`BACKUP_MAX_COUNT`, standaard 5) en backup-map (`BACKUP_DIR`, standaard `RegianBackups/` naast de werkmap)
+- Restore UI in de **⚙️ Instellingen**-tab: dropdown van beschikbare backups (nieuwste eerst), bevestigingscheckbox en één-klik restore
 
 ### 3.9 HITL — Human-in-the-Loop
 
@@ -403,7 +404,7 @@ Als er geen script gevonden wordt: de knop **🔨 Maak build.sh aan** laat de AI
 
 ---
 
-## 11. Verbeteringen in Milestone 1.2.1
+## 11. Verbeteringen in Milestone 1.2.7
 
 ### 11.1 Agent-context bij ticket-fixes
 

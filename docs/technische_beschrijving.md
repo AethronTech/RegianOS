@@ -245,6 +245,8 @@ start_gui()
   │   ├── tab_cron
   │   ├── tab_log   [Chronologisch | Per opdracht]
   │   └── tab_settings
+  │       └── Backup-sectie: instellingen · "Nu backup maken" · "Backups bekijken"
+  │                          · Restore UI: selectbox (nieuwste eerst) + bevestigingscheckbox + restore-knop
   └── get_agent() / get_orchestrator()   # @st.cache_resource
 ```
 
@@ -548,7 +550,7 @@ Kanban-gebaseerde bugtracker per project. Tickets worden opgeslagen als JSON-arr
 **Datastructuur per ticket:**
 ```json
 {
-  "id": "a1b2c3d4",
+  "id": "a1.2.7d4",
   "title": "...",
   "description": "...",
   "status": "todo|in_progress|review|done",

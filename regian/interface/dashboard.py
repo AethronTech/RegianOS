@@ -2017,6 +2017,32 @@ def start_gui():
                 from regian.skills.backup import list_backups as _lb
                 st.info(_lb())
 
+        # Restore sectie
+        st.markdown("#### 🔄 Werkmap herstellen vanuit backup")
+        _restore_bdir = Path(get_backup_dir())
+        _restore_zips = sorted(_restore_bdir.glob("*.zip"), reverse=True) if _restore_bdir.exists() else []
+        if not _restore_zips:
+            st.caption("Geen backups beschikbaar om te herstellen.")
+        else:
+            st.warning(
+                "⚠️ **Let op**: dit overschrijft bestanden in de werkmap met de inhoud van de geselecteerde backup. "
+                "Zorg dat je zeker bent voor je verder gaat."
+            )
+            _restore_selected = st.selectbox(
+                "Kies een backup om te herstellen",
+                options=[z.name for z in _restore_zips],
+                key="restore_backup_select",
+            )
+            _restore_confirm = st.checkbox(
+                "Ik begrijp dat bestaande bestanden worden overschreven",
+                key="restore_confirm_cb",
+            )
+            if st.button("🔄 Restore uitvoeren", key="restore_btn", disabled=not _restore_confirm):
+                with st.spinner("Werkmap aan het herstellen…"):
+                    from regian.skills.backup import restore_workspace as _do_restore
+                    _restore_result = _do_restore(_restore_selected)
+                st.info(_restore_result)
+
         st.markdown("---")
 
         # 12. Projectbeheer — hernoemen
