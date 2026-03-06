@@ -1698,9 +1698,13 @@ def start_gui():
             )
             from regian.core.token_log import get_pricing, set_pricing as _set_pricing
             import pandas as _pd_pr
+            # Toegestane modellen = unie van Gemini + Ollama lijst
+            _allowed_models = sorted(set(get_gemini_models()) | set(get_ollama_models()))
             _pricing_now = get_pricing()
             _pr_rows = []
             for _pr_model, _pr_entries in _pricing_now.items():
+                if _pr_model not in _allowed_models:
+                    continue  # modellen die niet meer in de lijst staan, niet tonen
                 if isinstance(_pr_entries, dict):
                     # backward compat: oud formaat
                     _pr_rows.append({
@@ -1720,7 +1724,7 @@ def start_gui():
                             "Output EUR/1M": float(_pr_e.get("output", 0)),
                         })
             if not _pr_rows:
-                _pr_rows = [{"Model": "", "Van datum": "", "Tot datum": "", "Input EUR/1M": 0.0, "Output EUR/1M": 0.0}]
+                _pr_rows = [{"Model": _allowed_models[0] if _allowed_models else "", "Van datum": "", "Tot datum": "", "Input EUR/1M": 0.0, "Output EUR/1M": 0.0}]
             _df_pr = _pd_pr.DataFrame(_pr_rows)
             _edited_pr = st.data_editor(
                 _df_pr,
@@ -1728,7 +1732,9 @@ def start_gui():
                 use_container_width=True,
                 key="settings_pricing_editor",
                 column_config={
-                    "Model": st.column_config.TextColumn("Model", required=True),
+                    "Model": st.column_config.SelectboxColumn(
+                        "Model", options=_allowed_models, required=True,
+                    ),
                     "Van datum": st.column_config.TextColumn("Van (JJJJ-MM-DD)", required=True),
                     "Tot datum": st.column_config.TextColumn("Tot (leeg = huidig)"),
                     "Input EUR/1M": st.column_config.NumberColumn("Input EUR/1M", min_value=0.0, format="%.4f"),
@@ -1737,9 +1743,12 @@ def start_gui():
             )
             if st.button("💾 Prijzen opslaan", key="save_pricing"):
                 _new_pricing: dict = {}
+                _skipped = []
                 for _, _pr_row in _edited_pr.iterrows():
                     _pm = str(_pr_row.get("Model", "")).strip()
-                    if not _pm:
+                    if not _pm or _pm not in _allowed_models:
+                        if _pm:
+                            _skipped.append(_pm)
                         continue
                     if _pm not in _new_pricing:
                         _new_pricing[_pm] = []
@@ -1750,6 +1759,8 @@ def start_gui():
                         "output": float(_pr_row.get("Output EUR/1M", 0)),
                     })
                 _set_pricing(_new_pricing)
+                if _skipped:
+                    st.warning(f"⚠️ Overgeslagen (niet in modellenlijst): {', '.join(set(_skipped))}")
                 st.success(f"✅ Prijzen opgeslagen voor {len(_new_pricing)} modellen.")
                 st.rerun()
 

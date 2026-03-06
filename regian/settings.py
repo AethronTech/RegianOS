@@ -141,7 +141,7 @@ def set_agent_max_iterations(n: int):
 
 # ── LLM Model Lists ────────────────────────────────────────────
 
-_DEFAULT_GEMINI_MODELS = "gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-flash-latest"
+_DEFAULT_GEMINI_MODELS = "gemini-3.1-flash-lite,gemini-3.1-flash,gemini-3.1-pro,gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-flash-latest"
 _DEFAULT_OLLAMA_MODELS = "mistral,llama3.1:8b,llama3.2,deepseek-r1:8b"
 
 def get_gemini_models() -> list[str]:
