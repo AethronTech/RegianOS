@@ -50,16 +50,27 @@ def _get_token_log_file() -> Path:
 # Oud formaat (backward compat): {model: {"input": float, "output": float}}
 
 _DEFAULT_PRICING: dict[str, list[dict]] = {
-    # Gemini
-    "gemini-2.5-flash":    [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
-    "gemini-2.5-pro":      [{"from": "2025-01-01", "to": None, "input": 1.25,   "output": 5.00}],
-    "gemini-2.0-flash":    [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
-    "gemini-flash-latest": [{"from": "2025-01-01", "to": None, "input": 0.075,  "output": 0.30}],
+    # Gemini 3.1 (maart 2026)
+    "gemini-3.1-flash-lite": [{"from": "2026-03-01", "to": None, "input": 0.22,  "output": 1.30}],
+    "gemini-3.1-flash":      [{"from": "2026-03-01", "to": None, "input": 0.43,  "output": 2.60}],
+    "gemini-3.1-pro":        [{"from": "2026-03-01", "to": None, "input": 1.73,  "output": 10.35}],
+    # Gemini 2.5 (verouderd; prijs gewijzigd in 2026)
+    "gemini-2.5-flash": [
+        {"from": "2025-01-01", "to": "2025-12-31", "input": 0.075, "output": 0.30},
+        {"from": "2026-01-01", "to": None,          "input": 0.26,  "output": 1.30},
+    ],
+    "gemini-2.5-pro": [
+        {"from": "2025-01-01", "to": "2025-12-31", "input": 1.25,  "output": 5.00},
+        {"from": "2026-01-01", "to": None,          "input": 1.08,  "output": 8.65},
+    ],
+    # Gemini 2.0
+    "gemini-2.0-flash":    [{"from": "2025-01-01", "to": None, "input": 0.09,  "output": 0.35}],
+    "gemini-flash-latest": [{"from": "2025-01-01", "to": None, "input": 0.43,  "output": 2.60}],
     # Ollama (lokaal → gratis)
-    "mistral":             [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
-    "llama3.1:8b":         [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
-    "llama3.2":            [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
-    "deepseek-r1:8b":      [{"from": "2025-01-01", "to": None, "input": 0.0,    "output": 0.0}],
+    "mistral":             [{"from": "2025-01-01", "to": None, "input": 0.0,   "output": 0.0}],
+    "llama3.1:8b":         [{"from": "2025-01-01", "to": None, "input": 0.0,   "output": 0.0}],
+    "llama3.2":            [{"from": "2025-01-01", "to": None, "input": 0.0,   "output": 0.0}],
+    "deepseek-r1:8b":      [{"from": "2025-01-01", "to": None, "input": 0.0,   "output": 0.0}],
 }
 
 def get_pricing() -> dict[str, dict[str, float]]:
