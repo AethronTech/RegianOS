@@ -2,8 +2,19 @@ import os
 from dotenv import load_dotenv, set_key
 from pathlib import Path
 
-ENV_FILE = Path(__file__).parent.parent / ".env"
-load_dotenv(ENV_FILE)
+_ROOT = Path(__file__).parent.parent
+_BASE_ENV = _ROOT / ".env"
+_env_override = os.environ.get("REGIAN_ENV_FILE")
+
+# Laad eerst de basisconfig, daarna omgevingsspecifieke overrides (QA / prod)
+load_dotenv(_BASE_ENV)
+if _env_override:
+    _override_path = _ROOT / _env_override
+    if _override_path.exists():
+        load_dotenv(_override_path, override=True)
+
+# ENV_FILE = actief configuratiebestand voor alle set_key() schrijfoperaties
+ENV_FILE = _ROOT / _env_override if _env_override else _BASE_ENV
 
 def get_root_dir() -> str:
     root = os.getenv("REGIAN_ROOT_DIR", str(Path.home() / "RegianWorkspace"))

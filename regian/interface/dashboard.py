@@ -764,8 +764,20 @@ def _load_uploads_context() -> str:
 
 
 def start_gui():
-    st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀", layout="wide")
-    st.title("🚀 Regian OS - Control Center")
+    _regian_env = os.environ.get("REGIAN_ENV", "").upper()
+    _is_qa = _regian_env == "QA"
+    if _is_qa:
+        st.set_page_config(page_title="[QA] Regian OS Cockpit", page_icon="🧪", layout="wide")
+    else:
+        st.set_page_config(page_title="Regian OS Cockpit", page_icon="🚀", layout="wide")
+    if _is_qa:
+        st.title("🧪 Regian OS - Control Center [QA]")
+        st.warning(
+            "⚠️ **QA-omgeving** — voor ontwikkeling en testen. "
+            "Productiedata wordt niet geraakt. Poort **8502**."
+        )
+    else:
+        st.title("🚀 Regian OS - Control Center")
     _inject_global_styles()
 
     # ── Sidebar ───────────────────────────────────────────────

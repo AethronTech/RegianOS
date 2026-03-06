@@ -1,4 +1,6 @@
 .env
+.env.qa
+.env.prod
 __pycache__/
 *.py[cod]
 *.pyo

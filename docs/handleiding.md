@@ -32,11 +32,34 @@ Het systeem werkt met een **grote taalmodel** (LLM, standaard Google Gemini) als
 
 ## Opstarten
 
+### Eén instantie (standaard)
+
 ```bash
 cd RegianOS
 source .venv/bin/activate
-streamlit run main.py
+python3 main.py          # dashboard op poort 8501
 ```
+
+### Twee omgevingen: QA + Productie
+
+Regian OS ondersteunt het gelijktijdig draaien van een **QA-instantie** (ontwikkeling/testen) en een **productie-instantie**. Ze draaien op afzonderlijke poorten en gebruiken gescheiden werkmap en logdata.
+
+| Script | Omgeving | Poort | Config |
+|---|---|---|---|
+| `./start_prod.sh` | Productie | 8501 | `.env` |
+| `./start_qa.sh` | QA / development | 8502 | `.env` + `.env.qa` (overrides) |
+
+**QA-omgeving opzetten:**
+
+1. Pas `.env.qa` aan met de QA-werkmap (standaard `RegianWorkspace_QA`):
+   ```
+   REGIAN_ROOT_DIR='/pad/naar/RegianWorkspace_QA'
+   BACKUP_DIR='/pad/naar/RegianBackups_QA'
+   ```
+2. Start QA: `./start_qa.sh`  
+3. Start Prod: `./start_prod.sh`
+
+De QA-instantie toont een oranje waarschuwingsbanner zodat beide versies visueel te onderscheiden zijn. Instellingen gewijzigd via het QA-dashboard worden naar `.env.qa` geschreven en raken de productieconfiguratie niet.
 
 De applicatie opent op `http://localhost:8501`. Configureer vóór gebruik de `.env`-variabelen:
 

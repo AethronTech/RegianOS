@@ -301,7 +301,25 @@ Beide modi loggen via `log_action()` met respectievelijk `source="direct"` en `s
 
 ## 7. Configuratie (`regian/settings.py`)
 
-Alle configuratie wordt opgeslagen in `.env` via `python-dotenv`. De module biedt getters en setters per instelling:
+Alle configuratie wordt opgeslagen in `.env` via `python-dotenv`. De module biedt getters en setters per instelling.
+
+### Meerder-omgevingen (QA / Productie)
+
+`settings.py` ondersteunt een gelaagd laadmechanisme:
+
+1. Laad eerst `.env` (basisconfig met API-sleutels en gedeelde instellingen)
+2. Als `REGIAN_ENV_FILE` gezet is, laad dan dat bestand als overrides met `load_dotenv(..., override=True)`
+3. `ENV_FILE` wijst naar het actieve bestand (override of basis) — alle `set_key()` schrijfoperaties gaan naar dit bestand
+
+| Env-variabele | Doel |
+|---|---|
+| `REGIAN_ENV` | Omgevingslabel: `qa` of `prod` — gebruikt door dashboard voor QA-banner |
+| `REGIAN_ENV_FILE` | Bestandsnaam van de override (bijv. `.env.qa`) |
+
+**QA-instantie** (`./start_qa.sh`): `REGIAN_ENV=qa`, `REGIAN_ENV_FILE=.env.qa`, poort 8502  
+**Productie-instantie** (`./start_prod.sh`): `REGIAN_ENV=prod`, geen override, poort 8501
+
+`.env.qa` bevat alleen de afwijkende waarden (werkmap, backup-map). API-sleutels worden gedeeld vanuit de basis `.env`.
 
 | Sleutel | Getter/Setter | Standaard |
 |---|---|---|
