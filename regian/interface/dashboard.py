@@ -1646,12 +1646,22 @@ def start_gui():
 
         with st.expander("✏️ Beschikbare modellen bewerken"):
             st.caption("Pas de modellijsten aan. Één modelnaam per regel.")
+            # Sync sessie-state met de actueel opgeslagen waarde zodra die wijzigt
+            # (voorkomt verouderde weergave na code-update of na opslaan)
+            _gemini_saved = "\n".join(get_gemini_models())
+            _ollama_saved = "\n".join(get_ollama_models())
+            if st.session_state.get("_gemini_models_hash") != hash(_gemini_saved):
+                st.session_state["settings_gemini_models"] = _gemini_saved
+                st.session_state["_gemini_models_hash"] = hash(_gemini_saved)
+            if st.session_state.get("_ollama_models_hash") != hash(_ollama_saved):
+                st.session_state["settings_ollama_models"] = _ollama_saved
+                st.session_state["_ollama_models_hash"] = hash(_ollama_saved)
             col_m1, col_m2 = st.columns(2)
             with col_m1:
                 st.markdown("**Gemini**")
                 gemini_text = st.text_area(
                     "Gemini-modellen",
-                    value="\n".join(get_gemini_models()),
+                    value=_gemini_saved,
                     height=120,
                     key="settings_gemini_models",
                     label_visibility="collapsed",
@@ -1660,7 +1670,7 @@ def start_gui():
                 st.markdown("**Ollama**")
                 ollama_text = st.text_area(
                     "Ollama-modellen",
-                    value="\n".join(get_ollama_models()),
+                    value=_ollama_saved,
                     height=120,
                     key="settings_ollama_models",
                     label_visibility="collapsed",
@@ -1670,23 +1680,27 @@ def start_gui():
                 if st.button("💾 Gemini opslaan", key="save_gemini_models"):
                     new_gemini = [m.strip() for m in gemini_text.splitlines() if m.strip()]
                     set_gemini_models(new_gemini)
+                    st.session_state["_gemini_models_hash"] = None  # force re-sync
                     st.success(f"✅ {len(new_gemini)} Gemini-modellen opgeslagen")
                     st.rerun()
             with col_ms2:
                 if st.button("💾 Ollama opslaan", key="save_ollama_models"):
                     new_ollama = [m.strip() for m in ollama_text.splitlines() if m.strip()]
                     set_ollama_models(new_ollama)
+                    st.session_state["_ollama_models_hash"] = None  # force re-sync
                     st.success(f"✅ {len(new_ollama)} Ollama-modellen opgeslagen")
                     st.rerun()
             col_mr1, col_mr2 = st.columns(2)
             with col_mr1:
                 if st.button("↩️ Gemini standaard", key="reset_gemini_models"):
                     set_gemini_models([m.strip() for m in _DEFAULT_GEMINI_MODELS.split(",")])
+                    st.session_state["_gemini_models_hash"] = None  # force re-sync
                     st.success("✅ Gemini-modellen hersteld")
                     st.rerun()
             with col_mr2:
                 if st.button("↩️ Ollama standaard", key="reset_ollama_models"):
                     set_ollama_models([m.strip() for m in _DEFAULT_OLLAMA_MODELS.split(",")])
+                    st.session_state["_ollama_models_hash"] = None  # force re-sync
                     st.success("✅ Ollama-modellen hersteld")
                     st.rerun()
 
